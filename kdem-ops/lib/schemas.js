@@ -4,10 +4,10 @@
 // filter), so one entry mirrors everywhere it belongs.
 // ============================================================
 
-export const CLUSTERS = ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi", "Tumakuru", "Shivamogga"];
+export const CLUSTERS = ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi", "Tumakuru", "Shivamogga", "Davanagere"];
 // All non-Bengaluru clusters count toward BB (Tumakuru & Shivamogga have
 // no cluster head yet, but leads still flow and count to BB numbers)
-export const BB_CLUSTERS = ["Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi", "Tumakuru", "Shivamogga"];
+export const BB_CLUSTERS = ["Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi", "Tumakuru", "Shivamogga", "Davanagere"];
 export const HEAD_CLUSTERS = ["Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi"];
 
 export const FYS = ["2025-26", "2026-27"];
