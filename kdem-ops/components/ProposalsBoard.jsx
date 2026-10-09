@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Plus, Trash2, FileText, Upload, ExternalLink, X, CheckCircle2, Circle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { PROPOSAL_STATUSES, PROPOSAL_TARGETS, PROPOSAL_CATEGORIES, BB_CLUSTERS } from "@/lib/schemas";
+import { PROPOSAL_STATUSES, PROPOSAL_TARGETS, PROPOSAL_CATEGORIES, BB_CLUSTERS, vColor, vName } from "@/lib/schemas";
 import Modal from "./Modal";
 import Pill from "./Pill";
 
@@ -12,26 +12,30 @@ import Pill from "./Pill";
  * Each opens with status, summary, NEXT STEPS table, and multiple document
  * uploads (Supabase Storage bucket `docs`). No fake percentages.
  */
-export default function ProposalsBoard({ vertical, accentColor, clusterFilter }) {
-  const { canWrite, notify } = useApp();
+// includeMirrors (Beyond Bengaluru): also show other verticals' proposals
+// tied to a BB cluster, e.g. a Gaming CoE in HDB owned by IT/GCC.
+export default function ProposalsBoard({ vertical, accentColor, clusterFilter, includeMirrors = false }) {
+  const { canWrite, canEditRow, notify } = useApp();
   const editable = canWrite(vertical);
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(null);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from("records").select("*")
-      .eq("vertical", vertical).eq("tab", "proposals")
-      .order("updated_at", { ascending: false });
-    setRows((data || []).filter((r) => !clusterFilter || r.data?.cluster === clusterFilter));
-  }, [vertical, clusterFilter]);
+    let q = supabase.from("records").select("*").eq("tab", "proposals").order("updated_at", { ascending: false });
+    if (!includeMirrors) q = q.eq("vertical", vertical);
+    const { data } = await q;
+    setRows((data || []).filter((r) =>
+      (r.vertical === vertical || BB_CLUSTERS.includes(r.data?.cluster)) &&
+      (!clusterFilter || r.data?.cluster === clusterFilter)));
+  }, [vertical, clusterFilter, includeMirrors]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     const ch = supabase.channel(`props-${vertical}-${clusterFilter || "all"}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "records", filter: `vertical=eq.${vertical}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "records", ...(includeMirrors ? {} : { filter: `vertical=eq.${vertical}` }) }, () => load())
       .subscribe();
     return () => supabase.removeChannel(ch);
-  }, [vertical, clusterFilter, load]);
+  }, [vertical, clusterFilter, includeMirrors, load]);
 
   async function save(data, id) {
     if (clusterFilter && !data.cluster) data.cluster = clusterFilter;
@@ -55,7 +59,6 @@ export default function ProposalsBoard({ vertical, accentColor, clusterFilter })
       <div className="card-head">
         <div>
           <div className="t">Proposals & strategic initiatives · {rows.length}</div>
-          <div className="s">Reports, CoEs, infrastructure & programs — documents and next steps, tracked to KITS/GoK</div>
         </div>
         {editable && (
           <button className="btn sm primary" style={{ marginLeft: "auto", background: accentColor, borderColor: accentColor }}
@@ -66,7 +69,7 @@ export default function ProposalsBoard({ vertical, accentColor, clusterFilter })
       </div>
 
       {rows.length === 0 ? (
-        <div className="empty">No proposals yet. These are your non-numeric deliverables — reports, CoEs, EV City, IT parks…</div>
+        <div className="empty">No proposals yet.</div>
       ) : (
         <div className="propgrid">
           {rows.map((r) => {
@@ -82,6 +85,7 @@ export default function ProposalsBoard({ vertical, accentColor, clusterFilter })
                   <Pill value={d.status} />
                   {d.category && <span className="pill" style={{ color: "var(--muted)", background: "var(--inset)" }}>{d.category}</span>}
                   {d.cluster && <span className="pill" style={{ color: "var(--gold)", background: "color-mix(in srgb, var(--gold) 14%, transparent)" }}>{d.cluster}</span>}
+                  {r.vertical !== vertical && <span className="srcpill"><span className="origin" style={{ background: vColor(r.vertical) }} />{vName(r.vertical)}</span>}
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: "auto" }}>
                   {d.submitted_to ? `→ ${d.submitted_to} · ` : ""}
@@ -95,7 +99,7 @@ export default function ProposalsBoard({ vertical, accentColor, clusterFilter })
 
       {open && (
         <ProposalModal row={open.id ? open : null} initial={open.data} vertical={vertical}
-          editable={editable} showCluster={vertical === "bb"}
+          editable={open.id ? canEditRow(open.vertical, open.data) : editable} showCluster={vertical === "bb"}
           onSave={save} onDelete={remove} onClose={() => setOpen(null)} notify={notify} />
       )}
     </div>

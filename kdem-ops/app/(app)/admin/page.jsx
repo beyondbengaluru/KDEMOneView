@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { UserPlus, Palette } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { VERTICALS, VERTICAL_KEYS, HEAD_CLUSTERS, THEMES, applyTheme, ROLE_LABELS, designationsFor } from "@/lib/schemas";
+import { VERTICALS, VERTICAL_KEYS, HEAD_CLUSTERS, THEMES, applyTheme, isHex, ROLE_LABELS, designationsFor } from "@/lib/schemas";
 import Modal from "@/components/Modal";
 
 
@@ -32,6 +32,7 @@ export default function AdminPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  const pickTimer = useRef(null);
   if (!isMaster) return <div className="card empty">Admin access is limited to the Master role.</div>;
 
   async function saveProfile(f) {
@@ -71,12 +72,20 @@ export default function AdminPage() {
     }
   }
 
+  // The colour picker fires continuously while dragging — preview live, save once it settles
+  function pickCustom(hex) {
+    setThemeState(hex);
+    if (!localStorage.getItem("kdem-accent")) applyTheme(hex);
+    clearTimeout(pickTimer.current);
+    pickTimer.current = setTimeout(() => setTheme(hex), 700);
+  }
+
   async function setTheme(key) {
     const { error } = await supabase.from("settings").upsert({ key: "theme", value: key });
     if (error) return notify(error.message);
     setThemeState(key);
-    applyTheme(key);
-    notify("Theme updated for everyone");
+    if (!localStorage.getItem("kdem-accent")) applyTheme(key);
+    notify("Team colour updated");
   }
 
 
@@ -130,9 +139,14 @@ export default function AdminPage() {
               <button key={key} className={`swatch ${theme === key ? "on" : ""}`} title={label}
                 style={{ background: hex }} onClick={() => setTheme(key)} />
             ))}
+            <label className={`swatch ${isHex(theme) ? "on" : ""}`} title="Any colour"
+              style={{ background: isHex(theme) ? theme : "conic-gradient(#e11d48,#f59e0b,#16a34a,#0284c7,#7c3aed,#e11d48)", position: "relative", overflow: "hidden" }}>
+              <input type="color" value={isHex(theme) ? theme : "#0c6b53"} onChange={(e) => pickCustom(e.target.value)}
+                style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
+            </label>
           </div>
           <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 10 }}>
-            Every dashboard number is computed live from the trackers — nothing to maintain here.
+            This is the team default. Anyone can pick their own colour from the avatar menu.
           </div>
         </div>
       </div>

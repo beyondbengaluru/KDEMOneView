@@ -13,7 +13,7 @@ import Pill from "./Pill";
  * to the selected FY (unless tabDef.noFy). tabDef.hasDocs adds attachments
  * (photos/files) to each entry.
  */
-export default function DataTable({ pageVertical, tabDef, accentColor, defaults = {}, hideCols = [], extraFilter, title }) {
+export default function DataTable({ pageVertical, tabDef, accentColor, defaults = {}, hideCols = [], extraFilter, title, id, headExtra, className = "" }) {
   const { canEditRow, notify, profile, fy } = useApp();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +71,14 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
     if (profile.role === "cluster_head" && tabDef.columns.some((c) => c.key === "cluster") && !data.cluster)
       data.cluster = profile.cluster;
     const home = row ? row.vertical : homeFor(data);
+    // Same name already in this dataset? Ask before creating a duplicate.
+    const firstKey = tabDef.columns[0].key;
+    const val = String(data[firstKey] || "").trim().toLowerCase();
+    if (!row?.id && val) {
+      const dup = rows.find((r) => String(r.data?.[firstKey] || "").trim().toLowerCase() === val
+        && (!data.cluster || !r.data?.cluster || r.data.cluster === data.cluster));
+      if (dup && !window.confirm(`"${dup.data[firstKey]}" is already in ${tabDef.label}${dup.data.cluster ? ` (${dup.data.cluster})` : ""}. Add it again anyway?`)) return null;
+    }
     if (!canEditRow(home, data))
       return notify("No edit rights for this entry — check the cluster/policy you picked.");
     const res = row
@@ -114,14 +122,13 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
   const visibleCols = tabDef.columns.filter((c) => !c.hide && !hideCols.includes(c.key));
 
   return (
-    <div className="card">
+    <div className={`card anchor ${className}`} id={id}>
       <div className="card-head">
         <div>
           <div className="t">{title || tabDef.label} · {filtered.length}</div>
-          {(tabDef.sub || mirrored) && (
-            <div className="s">{tabDef.sub || "Shared dataset — entries appear in every vertical that tracks them"}</div>
-          )}
+          {tabDef.sub && <div className="s">{tabDef.sub}</div>}
         </div>
+        {headExtra}
         <div style={{ marginLeft: "auto", display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
           <div className="searchbox">
             <Search size={13} style={{ color: "var(--faint)" }} />
@@ -214,7 +221,7 @@ function ContactCell({ d }) {
   );
 }
 
-function RecordModal({ tabDef, hideCols, row, initial, editable, onSave, onDelete, onClose, notify }) {
+export function RecordModal({ tabDef, hideCols, row, initial, editable, onSave, onDelete, onClose, notify }) {
   const [form, setForm] = useState(() => ({ ...initial, ...(row?.data || {}) }));
   const [id, setId] = useState(row?.id || null);
   const [docs, setDocs] = useState([]);
@@ -234,6 +241,7 @@ function RecordModal({ tabDef, hideCols, row, initial, editable, onSave, onDelet
   async function persist(stayOpen) {
     if (!form[firstKey]) return null;
     const saved = await onSave(form, row || (id ? { id, vertical: null } : null));
+    if (saved === null) return null; // declined duplicate or failed save — keep the form open
     const rid = id || saved?.id || null;
     if (!id && rid) setId(rid);
     if (!stayOpen) onClose();
@@ -266,7 +274,7 @@ function RecordModal({ tabDef, hideCols, row, initial, editable, onSave, onDelet
     <Modal title={id ? "Edit entry" : "New entry"} onClose={onClose}
       footer={
         <>
-          {id && row && editable && (
+          {id && row && editable && onDelete && (
             <button className="btn sm danger" style={{ marginRight: "auto" }} onClick={() => onDelete(row)}>
               <Trash2 size={13} /> Delete
             </button>
@@ -284,6 +292,12 @@ function RecordModal({ tabDef, hideCols, row, initial, editable, onSave, onDelet
                 <option value="">—</option>
                 {c.options.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
+            ) : c.type === "combo" ? (
+              <>
+                <input disabled={!editable} list={`dl-${c.key}`} value={form[c.key] ?? ""}
+                  onChange={(e) => set(c.key, e.target.value)} placeholder="Pick or type" />
+                <datalist id={`dl-${c.key}`}>{(c.options || []).map((o) => <option key={o} value={o} />)}</datalist>
+              </>
             ) : c.type === "textarea" ? (
               <textarea disabled={!editable} value={form[c.key] ?? ""} onChange={(e) => set(c.key, e.target.value)} />
             ) : (

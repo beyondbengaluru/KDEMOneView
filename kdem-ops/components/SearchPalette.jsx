@@ -1,10 +1,31 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Building2, ListTodo, Presentation, CalendarDays, FileText } from "lucide-react";
+import { Search, Building2, ListTodo, Presentation, CalendarDays, FileText, UserRound } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { VERTICALS, vName } from "@/lib/schemas";
+import { VERTICALS, vName, CLUSTER_TABS, isGcc, isLanded, isExpansion } from "@/lib/schemas";
+
+// Where a record lives in the app: its vertical tab, or the Beyond
+// Bengaluru cluster section for people who only see BB.
+const BB_SEC = { datacentres: "dcs", jobs: "jobs", awareness: "awareness", startups: "startups", policyreg: "policyreg" };
+function linkFor(r, canView) {
+  const d = r.data || {};
+  const bbSec = r.tab === "gccs" ? (!isLanded(d) ? "pipeline" : isExpansion(d) ? "expansions" : "new")
+    : r.tab.startsWith("cs_") ? r.tab : BB_SEC[r.tab];
+  if (r.vertical !== "bb" && canView(r.vertical)) {
+    const tab = r.tab === "gccs" ? (isGcc(d) || !d.type ? "gccs" : "itcos")
+      : r.tab.startsWith("db_") ? "database"
+      : ["policyreg", "awareness", "polstrategy"].includes(r.tab) ? "policies" : r.tab;
+    return `/v/${r.vertical}?tab=${tab}`;
+  }
+  if (canView("bb")) {
+    if (bbSec && CLUSTER_TABS.includes(d.cluster)) return `/v/bb?tab=${encodeURIComponent(d.cluster)}&sec=${bbSec}`;
+    if (bbSec) return `/v/bb?tab=all&sec=${bbSec}`;
+    return `/v/bb?tab=${r.tab.startsWith("db_") ? "database" : r.tab === "metrics" ? "metrics" : "policies"}`;
+  }
+  return null;
+}
 
 /**
  * ⌘K / Ctrl-K — search everything you can see: companies & records,
@@ -22,8 +43,9 @@ export default function SearchPalette({ onClose }) {
     if (term.trim().length < 2) return setResults([]);
     setBusy(true);
     const like = `%${term}%`;
-    const [recs, tasks, meets, evts] = await Promise.all([
+    const [recs, people, tasks, meets, evts] = await Promise.all([
       supabase.from("records").select("id,vertical,tab,data").ilike("data->>name", like).limit(8),
+      supabase.from("records").select("id,vertical,tab,data").ilike("data->>contact_name", like).limit(5),
       supabase.from("tasks").select("id,title,vertical,status").ilike("title", like).limit(6),
       supabase.from("meetings").select("id,title,date").ilike("title", like).limit(5),
       supabase.from("events").select("id,name,date,vertical").ilike("name", like).limit(5),
@@ -32,12 +54,17 @@ export default function SearchPalette({ onClose }) {
       .ilike("data->>title", like).eq("tab", "proposals").limit(5);
     const out = [
       ...(recs.data || []).map((r) => ({
-        icon: Building2, label: r.data?.name, sub: `${vName(r.vertical)} · ${r.tab.replace("db_", "database — ")}`,
-        go: canView(r.vertical) ? `/v/${r.vertical}` : null,
+        icon: Building2, label: r.data?.name,
+        sub: `${vName(r.vertical)} · ${r.tab.replace("db_", "database — ")}${r.data?.cluster ? ` · ${r.data.cluster}` : ""}`,
+        go: linkFor(r, canView),
+      })),
+      ...(people.data || []).map((r) => ({
+        icon: UserRound, label: r.data?.contact_name, sub: `Contact · ${r.data?.name || ""}${r.data?.contact_designation ? ` · ${r.data.contact_designation}` : ""}`,
+        go: linkFor(r, canView),
       })),
       ...(recs2.data || []).map((r) => ({
         icon: FileText, label: r.data?.title, sub: `${vName(r.vertical)} · proposal`,
-        go: canView(r.vertical) ? `/v/${r.vertical}` : null,
+        go: r.vertical === "bb" || (!canView(r.vertical) && canView("bb")) ? "/v/bb?tab=all" : canView(r.vertical) ? `/v/${r.vertical}?tab=proposals` : null,
       })),
       ...(tasks.data || []).map((t) => ({
         icon: ListTodo, label: t.title, sub: `Task · ${vName(t.vertical)} · ${t.status}`, go: "/tasks",
