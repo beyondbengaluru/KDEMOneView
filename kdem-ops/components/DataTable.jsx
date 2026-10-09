@@ -7,6 +7,7 @@ import { vColor, vName } from "@/lib/schemas";
 import { exportCSV, parseCSV } from "@/lib/csv";
 import Modal from "./Modal";
 import Pill from "./Pill";
+import { useSort } from "@/lib/sort";
 
 /**
  * Schema-driven table over one or more record sources (mirroring), scoped
@@ -63,6 +64,8 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
     }
     return out;
   }, [rows, q, tabDef, extraFilter]);
+
+  const { sorted, th } = useSort(filtered, { _contact: (r) => r.data?.contact_name || r.data?.contact_email || r.data?.contact_phone });
 
   const mirrored = sources.length > 1 || (tabDef.home && tabDef.home !== pageVertical);
 
@@ -158,13 +161,13 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
             <thead>
               <tr>
                 {visibleCols.map((c) => (
-                  <th key={c.key} style={c.type === "number" ? { textAlign: "right" } : undefined}>{c.label}</th>
+                  <th key={c.key} {...th(c.key, { style: c.type === "number" ? { textAlign: "right" } : undefined })}>{c.label}</th>
                 ))}
-                {tabDef.hasContact && <th>Contact</th>}
+                {tabDef.hasContact && <th {...th("_contact")}>Contact</th>}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => (
+              {sorted.map((r) => (
                 <tr key={r.id} onClick={() => setEditing(r)}>
                   {visibleCols.map((c, i) => {
                     const v = r.data?.[c.key];

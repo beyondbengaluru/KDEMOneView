@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
 import { VERTICALS, VERTICAL_KEYS, HEAD_CLUSTERS, THEMES, DESKS, applyTheme, isHex, ROLE_LABELS, designationsFor } from "@/lib/schemas";
 import Modal from "@/components/Modal";
+import { useSort } from "@/lib/sort";
 
 
 const ROLES = [
@@ -34,6 +35,8 @@ export default function AdminPage() {
   useEffect(() => { load(); }, [load]);
 
   const pickTimer = useRef(null);
+  const vLabel = (p) => (p.vertical === "ceo" ? "CEO Office" : DESKS[p.vertical] || (p.vertical ? VERTICALS[p.vertical]?.short : "All"));
+  const { sorted: sortedPeople, th } = useSort(people, { role: (p) => ROLE_LABELS[p.role] || p.role, vertical: vLabel });
   if (!isMaster) return <div className="card empty">Admin access is limited to the Master role.</div>;
 
   async function saveProfile(f) {
@@ -109,9 +112,9 @@ export default function AdminPage() {
         </div>
         <div className="tablewrap">
           <table className="data">
-            <thead><tr><th>Name</th><th>Designation</th><th>Email</th><th>Role</th><th>Vertical</th><th>Cluster</th></tr></thead>
+            <thead><tr><th {...th("name")}>Name</th><th {...th("title")}>Designation</th><th {...th("email")}>Email</th><th {...th("role")}>Role</th><th {...th("vertical")}>Vertical</th><th {...th("cluster")}>Cluster</th></tr></thead>
             <tbody>
-              {people.map((p) => (
+              {sortedPeople.map((p) => (
                 <tr key={p.id} onClick={() => isMaster && setEditP({ ...p })}>
                   <td style={{ fontWeight: 600 }}>{p.name || "—"}</td>
                   <td style={{ color: "var(--muted)" }}>{p.title || "—"}</td>

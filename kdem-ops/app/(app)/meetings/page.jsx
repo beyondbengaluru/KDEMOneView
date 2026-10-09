@@ -8,6 +8,7 @@ import { generateMoM } from "@/lib/mom";
 import Modal from "@/components/Modal";
 import Pill from "@/components/Pill";
 import Attachments from "@/components/Attachments";
+import { useSort } from "@/lib/sort";
 import { outlookAccount, pushMeeting, deleteOutlookEvent, meetingICS } from "@/lib/outlook";
 
 export default function MeetingsPage() {
@@ -15,6 +16,10 @@ export default function MeetingsPage() {
   const [rows, setRows] = useState([]);
   const [team, setTeam] = useState([]);
   const [editing, setEditing] = useState(null);
+  const { sorted, th } = useSort(rows, {
+    date: (m) => (m.date ? `${m.date} ${m.time || ""}` : ""), verticals: (m) => (m.verticals || []).join(", "),
+    people: (m) => (m.participants || []).length,
+  });
 
   const load = useCallback(async () => {
     const [m, p] = await Promise.all([
@@ -91,9 +96,9 @@ export default function MeetingsPage() {
         ) : (
           <div className="tablewrap">
             <table className="data">
-              <thead><tr><th>Meeting</th><th>Kind</th><th>Mode</th><th>Date</th><th>Verticals</th><th>People</th></tr></thead>
+              <thead><tr><th {...th("title")}>Meeting</th><th {...th("kind")}>Kind</th><th {...th("mode")}>Mode</th><th {...th("date")}>Date</th><th {...th("verticals")}>Verticals</th><th {...th("people")}>People</th></tr></thead>
               <tbody>
-                {rows.map((m) => (
+                {sorted.map((m) => (
                   <tr key={m.id} onClick={() => setEditing(m)}>
                     <td style={{ fontWeight: 600 }}>{m.title}</td>
                     <td><Pill value={m.kind} /></td>

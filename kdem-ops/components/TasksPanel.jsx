@@ -8,6 +8,7 @@ import { todayISO } from "@/lib/util";
 import Modal from "./Modal";
 import Pill from "./Pill";
 import Attachments from "./Attachments";
+import { useSort } from "@/lib/sort";
 
 /**
  * Task CRM. Modes:
@@ -52,6 +53,12 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
   }, [rows, filter]);
 
   // Mirrors the SQL policy: creator, assignee, or the owning vertical's team
+  const RANK = { high: 0, medium: 1, low: 2, todo: 0, inprogress: 1, done: 2 };
+  const { sorted, th } = useSort(filtered, {
+    task: (t) => t.title, priority: (t) => RANK[t.priority], status: (t) => RANK[t.status],
+    due: (t) => (t.due_date ? `${t.due_date} ${t.due_time || ""}` : ""),
+  });
+
   const canEditTask = (t) =>
     t.created_by === profile.id || (t.assignee && t.assignee === profile.name) ||
     (canWrite(t.vertical) && (profile.role !== "cluster_head" || (t.cluster || "") === profile.cluster));
@@ -117,14 +124,15 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
           <table className="data">
             <thead>
               <tr>
-                <th>Task</th>
-                {showVerticalCol && <th>Vertical</th>}
-                {showClusterCol && !cluster && <th>Cluster</th>}
-                <th>Assignee</th><th>Priority</th><th>Status</th><th>Due</th>
+                <th {...th("task")}>Task</th>
+                {showVerticalCol && <th {...th("vertical")}>Vertical</th>}
+                {showClusterCol && !cluster && <th {...th("cluster")}>Cluster</th>}
+                <th {...th("assignee")}>Assignee</th><th {...th("priority")}>Priority</th>
+                <th {...th("status")}>Status</th><th {...th("due")}>Due</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t) => (
+              {sorted.map((t) => (
                 <tr key={t.id} onClick={() => setEditing(t)}>
                   <td style={{ fontWeight: 600 }}>
                     {t.meeting_id && <Presentation size={12} style={{ color: "var(--brand)", marginRight: 6, verticalAlign: -1 }} title="From a meeting" />}

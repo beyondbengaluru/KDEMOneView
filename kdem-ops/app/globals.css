@@ -363,3 +363,7 @@ html.dark[data-theme]:not([data-theme="emerald"]) {
   border-radius: 10px; background: var(--inset); outline: none; font-family: inherit; }
 .badge { font-size: 10.5px; font-weight: 700; min-width: 18px; text-align: center; padding: 1px 6px; border-radius: 99px; background: var(--brand); color: #fff; }
 @media (max-width: 760px) { .comms { grid-template-columns: 1fr; } .comms-side { max-height: 200px; border-right: none; border-bottom: 1px solid var(--line); } }
+table.data th.sortable { cursor: pointer; user-select: none; }
+table.data th.sortable:hover { color: var(--muted); }
+table.data th[aria-sort]::after { content: "↑"; margin-left: 4px; color: var(--brand); }
+table.data th[aria-sort="descending"]::after { content: "↓"; }
