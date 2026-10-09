@@ -13,7 +13,7 @@
 create or replace function public.bb_clusters() returns text[]
 language sql immutable as $$
   select array['Mysuru','Mangaluru','Hubballi-Dharwad-Belagavi','Kalaburagi',
-               'Tumakuru','Shivamogga','Davanagere','Cluster TBD']
+               'Tumakuru','Davanagere','Cluster TBD']
 $$;
 
 create or replace function public.can_write_row(v text, d jsonb) returns boolean

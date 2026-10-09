@@ -35,6 +35,48 @@ with team + external participants, minutes, and next steps that become real
 tasks (linked, and on the calendar when they have a due date). Tasks can be
 multi-vertical and can be kept off the calendar.
 
+## What's new in v7
+- **Task visibility fixed.** The old task-writing rule also granted reading, so
+  the CEO Office (and vertical leads, for private tasks) could see everything.
+  The CEO Office now sees only tasks escalated to it, shared with the whole
+  team, its own, or ones it assigned. Assignees can update their own tasks.
+- **Team space** (sidebar): **Communications** — your vertical's team channel,
+  Everyone, direct messages, and Marketing↔agency channels; attach uploads or
+  share from Resources; unread badges. **Resources** — upload files or share
+  live Google / Microsoft 365 links, for everyone or chosen verticals.
+- **Calendar**: Meetings / Tasks toggle (top right). The Meetings calendar
+  syncs with Outlook once connected; every meeting also has an **.ics**
+  download. Meetings and tasks take documents. Meetings have an end time.
+- **External agencies**: role *External agency* with a desk (PR or Digital
+  media). They see only their desk in Marketing and their message channel.
+- **Social media**: "Sync now" on Marketing → Digital pulls live follower
+  counts (see setup below); can run on a schedule.
+- Numbers tab removed — totals like *Startups registered* are updated by
+  clicking the tile (each update is dated and kept).
+- Home cards use short labels so the progress bars line up; System section is
+  Master-only; Shivamogga merged into **Davanagere**.
+- Existing databases: run `supabase/migrate_v7.sql` (after v5 and v6).
+
+### Outlook sync — one-time setup (IT / Azure admin)
+1. Azure portal → Microsoft Entra ID → App registrations → New registration.
+2. Platform **Single-page application**, redirect URI
+   `https://<your-site>/msal-redirect.html` (add `http://localhost:3000/msal-redirect.html` for local).
+3. API permissions → Microsoft Graph → Delegated → **Calendars.ReadWrite**
+   (grant admin consent if your tenant requires it).
+4. Set in Vercel (or `.env.local`): `NEXT_PUBLIC_MS_CLIENT_ID=<Application ID>`,
+   `NEXT_PUBLIC_MS_TENANT_ID=<Directory ID>`, then redeploy.
+Each person then clicks **Connect Outlook** on the Calendar once. Meetings they
+create or attend are added to their Outlook; their Outlook events show in the
+OneView Meetings calendar.
+
+### Social follower sync — setup
+`supabase functions deploy social-sync`, then set the secrets for the
+platforms you have access to (`supabase secrets set KEY=value`) — the list is
+at the top of `supabase/functions/social-sync/index.ts`. YouTube needs only a
+free Google API key; Facebook/Instagram need a Meta Page token; LinkedIn needs
+Community Management API access; X needs a paid API tier. For automatic
+refresh every 6 hours run `supabase/social_cron.sql`.
+
 ## What's new in v6
 - **Data is H1 FY 2026-27 only.** `supabase/seed_data.sql` now wipes all
   tracker rows and events and loads just the H1 report (1 Apr – 30 Sep 2026).
@@ -131,8 +173,9 @@ multi-vertical and can be kept off the calendar.
    database first.
 3. SQL Editor → paste all of `supabase/seed_data.sql` → Run (loads the
    H1 FY 2026-27 data).
-   *Upgrading an existing database?* Run `supabase/migrate_v5.sql` and
-   `supabase/migrate_v6.sql` first. Note `seed_data.sql` replaces ALL tracker
+   Fresh install: `schema.sql`, then `migrate_v7.sql`, then `seed_data.sql`.
+   *Upgrading an existing database?* Run `supabase/migrate_v5.sql`,
+   `migrate_v6.sql` and `migrate_v7.sql` (each is safe to re-run). Note `seed_data.sql` replaces ALL tracker
    rows and events with the H1 FY 2026-27 data.
 4. Authentication → Users → *Add user* → your own email + password.
 5. SQL Editor:

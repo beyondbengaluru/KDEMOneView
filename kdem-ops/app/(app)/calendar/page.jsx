@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { outlookConfigured, outlookAccount, connectOutlook, disconnectOutlook, listOutlook, pushMeeting } from "@/lib/outlook";
 import { supabase } from "@/lib/supabase";
 import { vColor, vName } from "@/lib/schemas";
 import { monthName, todayISO } from "@/lib/util";
@@ -13,7 +14,14 @@ function shiftWeek(iso, days) {
 }
 
 export default function CalendarPage() {
-  const { fy } = useApp();
+  const { fy, profile, notify } = useApp();
+  // Two calendars: meetings (+ events, synced with Outlook) and tasks
+  const [mode, setModeState] = useState("meetings");
+  useEffect(() => { const s = localStorage.getItem("kdem-cal"); if (s) setModeState(s); }, []);
+  const setMode = (m) => { setModeState(m); localStorage.setItem("kdem-cal", m); setSelected(null); };
+  const [ms, setMs] = useState(null);        // signed-in Microsoft account
+  const [outlook, setOutlook] = useState([]);
+  const [syncing, setSyncing] = useState(false);
   const now = new Date();
   const [y, setY] = useState(now.getFullYear());
   const [m, setM] = useState(now.getMonth());
@@ -26,6 +34,31 @@ export default function CalendarPage() {
     const d = new Date(); d.setDate(d.getDate() - d.getDay());
     return d.toISOString().slice(0, 10);
   });
+
+  useEffect(() => { outlookAccount().then(setMs).catch(() => setMs(null)); }, []);
+
+  // Pull Outlook for the visible range, and push any of my meetings that aren't there yet
+  const syncOutlook = useCallback(async (quiet = false) => {
+    if (!ms) return;
+    setSyncing(true);
+    try {
+      const from = new Date(y, m - 1, 1).toISOString().slice(0, 10);
+      const to = new Date(y, m + 2, 0).toISOString().slice(0, 10);
+      const today = todayISO();
+      const mine = meetings.filter((mt) => mt.date && mt.date >= today && !mt.outlook_ids?.[profile.id] &&
+        (mt.created_by === profile.id || (mt.participants || []).includes(profile.name)));
+      for (const mt of mine) {
+        const evId = await pushMeeting(mt, null);
+        const ids = { ...(mt.outlook_ids || {}), [profile.id]: evId };
+        await supabase.from("meetings").update({ outlook_ids: ids }).eq("id", mt.id);
+        mt.outlook_ids = ids;
+      }
+      setOutlook(await listOutlook(from, to));
+      if (!quiet) notify(mine.length ? `Synced · ${mine.length} meeting${mine.length > 1 ? "s" : ""} added to Outlook` : "Synced with Outlook");
+    } catch (e) { notify(`Outlook: ${e.message}`); }
+    setSyncing(false);
+  }, [ms, y, m, meetings, profile, notify]);
+  useEffect(() => { if (ms && mode === "meetings" && meetings.length) syncOutlook(true); }, [ms, mode, y, m, meetings.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     (async () => {
@@ -43,10 +76,18 @@ export default function CalendarPage() {
   const items = useMemo(() => {
     const map = {};
     const push = (d, item) => { if (d) (map[d] = map[d] || []).push(item); };
+    if (mode === "tasks") {
+      tasks.forEach((t) => push(t.due_date, {
+        kind: "task", label: t.title, color: t.status === "done" ? "var(--good)" : vColor(t.vertical),
+        sub: `${vName(t.vertical)} · ${t.status === "done" ? "done" : t.status === "inprogress" ? "in progress" : "due"}${t.assignee ? ` · ${t.assignee}` : ""}`, meta: t,
+      }));
+      return map;
+    }
     events.forEach((e) => push(e.date, { kind: "event", label: e.name, color: vColor(e.vertical), sub: vName(e.vertical), meta: e }));
-    tasks.forEach((t) => push(t.due_date, {
-      kind: "task", label: t.title, color: t.status === "done" ? "var(--good)" : "var(--gold)",
-      sub: `${vName(t.vertical)} · ${t.status === "done" ? "done" : "due"}`, meta: t,
+    const synced = new Set(meetings.flatMap((mt) => Object.values(mt.outlook_ids || {})));
+    outlook.filter((o) => !synced.has(o.id)).forEach((o) => push(o.date, {
+      kind: "outlook", label: o.title, color: "#0F6CBD",
+      sub: `Outlook${o.time ? ` · ${o.time}${o.end ? `–${o.end}` : ""}` : ""}${o.location ? ` · ${o.location}` : ""}`, meta: o,
     }));
     meetings.forEach((mt) => push(mt.date, {
       kind: "meeting", label: mt.title, color: "var(--brand)",
@@ -54,7 +95,7 @@ export default function CalendarPage() {
       meta: mt,
     }));
     return map;
-  }, [events, tasks, meetings]);
+  }, [events, tasks, meetings, outlook, mode]);
 
   const first = new Date(y, m, 1);
   const startDow = first.getDay();
@@ -80,8 +121,27 @@ export default function CalendarPage() {
           <button className={`chip ${view === "month" ? "on" : ""}`} onClick={() => setView("month")}>Month</button>
           <button className={`chip ${view === "week" ? "on" : ""}`} onClick={() => setView("week")}>Week</button>
         </div>
-        <div style={{ fontSize: 12, color: "var(--faint)" }}>Everything you can see — events, meetings & task due dates</div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 7 }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
+          {mode === "meetings" && !outlookConfigured && (
+            <button className="btn sm" disabled title="Outlook sync needs a one-time Microsoft app registration — see README">Connect Outlook</button>
+          )}
+          {mode === "meetings" && outlookConfigured && (ms ? (
+            <>
+              <span style={{ fontSize: 11.5, color: "var(--faint)" }} title={ms.username}>Outlook connected</span>
+              <button className="btn sm ghost" disabled={syncing} onClick={() => syncOutlook()} title="Sync now">
+                <RefreshCw size={13} className={syncing ? "spin" : ""} />
+              </button>
+              <button className="btn sm ghost" onClick={async () => { await disconnectOutlook(); setMs(null); setOutlook([]); }}>Disconnect</button>
+            </>
+          ) : (
+            <button className="btn sm" onClick={async () => {
+              try { setMs(await connectOutlook()); notify("Outlook connected"); } catch (e) { notify(`Outlook: ${e.message}`); }
+            }}>Connect Outlook</button>
+          ))}
+          <div className="chips" style={{ marginRight: 6 }}>
+            <button className={`chip ${mode === "meetings" ? "on" : ""}`} onClick={() => setMode("meetings")}>Meetings</button>
+            <button className={`chip ${mode === "tasks" ? "on" : ""}`} onClick={() => setMode("tasks")}>Tasks</button>
+          </div>
           <button className="btn sm ghost" onClick={() => shift(-1)}><ChevronLeft size={14} /></button>
           <button className="btn sm ghost" onClick={() => { const d = new Date(); setY(d.getFullYear()); setM(d.getMonth()); }}>Today</button>
           <button className="btn sm ghost" onClick={() => shift(1)}><ChevronRight size={14} /></button>
@@ -152,9 +212,12 @@ export default function CalendarPage() {
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{it.label}</div>
                   <div style={{ fontSize: 11, color: "var(--faint)" }}>
-                    {it.kind === "event" ? "Event" : it.kind === "meeting" ? "Meeting" : "Task"} · {it.sub}
+                    {it.kind === "event" ? "Event" : it.kind === "meeting" ? "Meeting" : it.kind === "outlook" ? "Outlook" : "Task"} · {it.sub}
                   </div>
                 </div>
+                {it.kind === "outlook" && it.meta.webLink && (
+                  <a className="btn sm" style={{ marginLeft: "auto" }} href={it.meta.webLink} target="_blank" rel="noreferrer">Open in Outlook</a>
+                )}
                 {it.kind === "meeting" && it.meta.mode === "online" && it.meta.link && (
                   <a className="btn sm" style={{ marginLeft: "auto" }} href={it.meta.link} target="_blank" rel="noreferrer">Join</a>
                 )}

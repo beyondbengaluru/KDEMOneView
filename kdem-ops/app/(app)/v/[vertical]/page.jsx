@@ -14,6 +14,7 @@ import MeetingsMini from "@/components/MeetingsMini";
 import ProposalsBoard from "@/components/ProposalsBoard";
 import BBView from "@/components/BBView";
 import ContactsDirectory from "@/components/ContactsDirectory";
+import { RefreshCw } from "lucide-react";
 
 export default function VerticalPage() {
   return (
@@ -65,6 +66,7 @@ function VerticalPageInner() {
   if (v.isBB) return <BBView />;
 
   const activeTab = v.tabs.find((t) => (t.viewKey || t.key) === tab);
+  if (tab !== "overview" && !activeTab) { setTimeout(() => setTab("overview")); return null; } // stale link to a removed tab
 
   return (
     <>
@@ -105,8 +107,30 @@ function VerticalPageInner() {
       ) : activeTab?.isDatabase ? (
         <ContactsDirectory vertical={vertical} accentColor={v.color} />
       ) : (
-        <DataTable pageVertical={vertical} tabDef={activeTab} accentColor={v.color} />
+        <DataTable pageVertical={vertical} tabDef={activeTab} accentColor={v.color}
+          headExtra={activeTab.key === "digital" ? <SocialSync /> : null} />
       )}
     </>
+  );
+}
+
+// Pull live follower counts (social-sync edge function)
+function SocialSync() {
+  const { notify } = useApp();
+  const [busy, setBusy] = useState(false);
+  async function run() {
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("social-sync");
+    setBusy(false);
+    if (error) return notify("Sync isn't set up yet — deploy the social-sync function (see README)");
+    const r = data?.results || {};
+    const done = Object.entries(r).filter(([, v]) => typeof v === "number").map(([k]) => k);
+    const off = Object.entries(r).filter(([, v]) => typeof v !== "number").map(([k, v]) => `${k}: ${v}`);
+    notify(done.length ? `Updated ${done.join(", ")}${off.length ? ` · ${off.length} not synced` : ""}` : off.join(" · ") || "Nothing to sync");
+  }
+  return (
+    <button className="btn sm" disabled={busy} onClick={run} title="Fetch follower counts from the platforms">
+      <RefreshCw size={13} className={busy ? "spin" : ""} /> Sync now
+    </button>
   );
 }

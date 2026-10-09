@@ -7,6 +7,8 @@ import { SCOPES, VERTICAL_KEYS, BB_CLUSTERS, TASK_VISIBILITIES, vColor, vName } 
 import { todayISO } from "@/lib/util";
 import Modal from "./Modal";
 import Pill from "./Pill";
+import Attachments from "./Attachments";
+import { useSort } from "@/lib/sort";
 
 /**
  * Task CRM. Modes:
@@ -50,10 +52,18 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
     return rows;
   }, [rows, filter]);
 
-  const canEditTask = (t) =>
-    canWrite(t.vertical) && (profile.role !== "cluster_head" || (t.cluster || "") === profile.cluster);
+  // Mirrors the SQL policy: creator, assignee, or the owning vertical's team
+  const RANK = { high: 0, medium: 1, low: 2, todo: 0, inprogress: 1, done: 2 };
+  const { sorted, th } = useSort(filtered, {
+    task: (t) => t.title, priority: (t) => RANK[t.priority], status: (t) => RANK[t.status],
+    due: (t) => (t.due_date ? `${t.due_date} ${t.due_time || ""}` : ""),
+  });
 
-  async function save(f, id) {
+  const canEditTask = (t) =>
+    t.created_by === profile.id || (t.assignee && t.assignee === profile.name) ||
+    (canWrite(t.vertical) && (profile.role !== "cluster_head" || (t.cluster || "") === profile.cluster));
+
+  async function save(f, id, stayOpen = false) {
     const payload = {
       title: f.title, vertical: f.vertical, verticals: f.verticals || [],
       cluster: f.cluster || null, assignee: f.assignee || "",
@@ -62,9 +72,11 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
     };
     const res = id
       ? await supabase.from("tasks").update(payload).eq("id", id)
-      : await supabase.from("tasks").insert([payload]);
-    if (res.error) return notify(res.error.message);
-    notify("Saved"); setEditing(null); load();
+      : await supabase.from("tasks").insert([payload]).select().single();
+    if (res.error) { notify(res.error.message); return null; }
+    notify("Saved"); load();
+    if (!stayOpen) setEditing(null);
+    return res.data;
   }
   async function remove(id) {
     const { error } = await supabase.from("tasks").delete().eq("id", id);
@@ -112,14 +124,15 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
           <table className="data">
             <thead>
               <tr>
-                <th>Task</th>
-                {showVerticalCol && <th>Vertical</th>}
-                {showClusterCol && !cluster && <th>Cluster</th>}
-                <th>Assignee</th><th>Priority</th><th>Status</th><th>Due</th>
+                <th {...th("task")}>Task</th>
+                {showVerticalCol && <th {...th("vertical")}>Vertical</th>}
+                {showClusterCol && !cluster && <th {...th("cluster")}>Cluster</th>}
+                <th {...th("assignee")}>Assignee</th><th {...th("priority")}>Priority</th>
+                <th {...th("status")}>Status</th><th {...th("due")}>Due</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((t) => (
+              {sorted.map((t) => (
                 <tr key={t.id} onClick={() => setEditing(t)}>
                   <td style={{ fontWeight: 600 }}>
                     {t.meeting_id && <Presentation size={12} style={{ color: "var(--brand)", marginRight: 6, verticalAlign: -1 }} title="From a meeting" />}
@@ -157,14 +170,23 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
       {editing && (
         <TaskModal task={editing} editableFn={canEditTask} team={team}
           lockVertical={!!vertical && vertical !== "bb"} lockCluster={!!cluster}
-          onSave={save} onDelete={remove} onClose={() => setEditing(null)} />
+          onSave={save} onDelete={remove} onClose={() => setEditing(null)} notify={notify} />
       )}
     </div>
   );
 }
 
-function TaskModal({ task, editableFn, team, lockVertical, lockCluster, onSave, onDelete, onClose }) {
+function TaskModal({ task, editableFn, team, lockVertical, lockCluster, onSave, onDelete, onClose, notify }) {
   const [f, setF] = useState({ verticals: [], ...task });
+  const [savedId, setSavedId] = useState(task.id || null);
+  // Attaching to a new task saves it first and keeps the form open
+  async function ensureId() {
+    if (savedId) return savedId;
+    if (!f.title) return null;
+    const row = await onSave(f, null, true);
+    if (row?.id) setSavedId(row.id);
+    return row?.id || null;
+  }
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const editable = task.id ? editableFn(task) : true;
   const toggleV = (v) =>
@@ -180,7 +202,7 @@ function TaskModal({ task, editableFn, team, lockVertical, lockCluster, onSave, 
             </button>
           )}
           <button className="btn sm" onClick={onClose}>Cancel</button>
-          {editable && <button className="btn sm primary" onClick={() => f.title && onSave(f, task.id)}>Save</button>}
+          {editable && <button className="btn sm primary" onClick={() => f.title && onSave(f, savedId)}>Save</button>}
         </>
       }>
       <div className="field"><label>Task</label>
@@ -230,6 +252,7 @@ function TaskModal({ task, editableFn, team, lockVertical, lockCluster, onSave, 
       </div>
       <div className="field"><label>Notes</label>
         <textarea value={f.notes ?? ""} onChange={(e) => set("notes", e.target.value)} disabled={!editable} /></div>
+      <Attachments folder="tasks" id={savedId} ensureId={ensureId} editable={editable} notify={notify} />
     </Modal>
   );
 }

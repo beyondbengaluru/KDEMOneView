@@ -16,13 +16,14 @@ function linkFor(r, canView) {
   if (r.vertical !== "bb" && canView(r.vertical)) {
     const tab = r.tab === "gccs" ? (isGcc(d) || !d.type ? "gccs" : "itcos")
       : r.tab.startsWith("db_") ? "database"
-      : ["policyreg", "awareness", "polstrategy"].includes(r.tab) ? "policies" : r.tab;
+      : ["policyreg", "awareness", "polstrategy"].includes(r.tab) ? "policies"
+      : r.tab === "metrics" ? "overview" : r.tab;
     return `/v/${r.vertical}?tab=${tab}`;
   }
   if (canView("bb")) {
     if (bbSec && CLUSTER_TABS.includes(d.cluster)) return `/v/bb?tab=${encodeURIComponent(d.cluster)}&sec=${bbSec}`;
     if (bbSec) return `/v/bb?tab=all&sec=${bbSec}`;
-    return `/v/bb?tab=${r.tab.startsWith("db_") ? "database" : r.tab === "metrics" ? "metrics" : "policies"}`;
+    return `/v/bb?tab=${r.tab.startsWith("db_") ? "database" : r.tab === "metrics" ? "overview" : "policies"}`;
   }
   return null;
 }

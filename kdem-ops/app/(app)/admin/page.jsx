@@ -3,8 +3,9 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { UserPlus, Palette } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { VERTICALS, VERTICAL_KEYS, HEAD_CLUSTERS, THEMES, applyTheme, isHex, ROLE_LABELS, designationsFor } from "@/lib/schemas";
+import { VERTICALS, VERTICAL_KEYS, HEAD_CLUSTERS, THEMES, DESKS, applyTheme, isHex, ROLE_LABELS, designationsFor } from "@/lib/schemas";
 import Modal from "@/components/Modal";
+import { useSort } from "@/lib/sort";
 
 
 const ROLES = [
@@ -13,6 +14,7 @@ const ROLES = [
   ["lead", "Vertical Lead"],
   ["member", "Vertical Member"],
   ["cluster_head", "BB Cluster Head"],
+  ["external", "External agency (Marketing desk only)"],
 ];
 
 export default function AdminPage() {
@@ -33,12 +35,14 @@ export default function AdminPage() {
   useEffect(() => { load(); }, [load]);
 
   const pickTimer = useRef(null);
+  const vLabel = (p) => (p.vertical === "ceo" ? "CEO Office" : DESKS[p.vertical] || (p.vertical ? VERTICALS[p.vertical]?.short : "All"));
+  const { sorted: sortedPeople, th } = useSort(people, { role: (p) => ROLE_LABELS[p.role] || p.role, vertical: vLabel });
   if (!isMaster) return <div className="card empty">Admin access is limited to the Master role.</div>;
 
   async function saveProfile(f) {
     const { error } = await supabase.from("profiles").update({
       name: f.name, title: f.title || "", role: f.role,
-      vertical: ["lead", "member"].includes(f.role) ? f.vertical : (f.role === "cluster_head" ? "bb" : (f.role === "ceo" ? "ceo" : null)),
+      vertical: ["lead", "member"].includes(f.role) ? f.vertical : f.role === "external" ? (f.desk || "pr_desk") : (f.role === "cluster_head" ? "bb" : (f.role === "ceo" ? "ceo" : null)),
       cluster: f.role === "cluster_head" ? f.cluster : null,
     }).eq("id", f.id);
     notify(error ? error.message : "Saved");
@@ -59,7 +63,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           email: f.email, password: f.password, name: f.name, title: f.title || "",
           role: f.role || "member",
-          vertical: ["lead", "member"].includes(f.role) ? f.vertical : (f.role === "cluster_head" ? "bb" : (f.role === "ceo" ? "ceo" : null)),
+          vertical: ["lead", "member"].includes(f.role) ? f.vertical : f.role === "external" ? (f.desk || "pr_desk") : (f.role === "cluster_head" ? "bb" : (f.role === "ceo" ? "ceo" : null)),
           cluster: f.role === "cluster_head" ? f.cluster : null,
         }),
       });
@@ -108,15 +112,15 @@ export default function AdminPage() {
         </div>
         <div className="tablewrap">
           <table className="data">
-            <thead><tr><th>Name</th><th>Designation</th><th>Email</th><th>Role</th><th>Vertical</th><th>Cluster</th></tr></thead>
+            <thead><tr><th {...th("name")}>Name</th><th {...th("title")}>Designation</th><th {...th("email")}>Email</th><th {...th("role")}>Role</th><th {...th("vertical")}>Vertical</th><th {...th("cluster")}>Cluster</th></tr></thead>
             <tbody>
-              {people.map((p) => (
+              {sortedPeople.map((p) => (
                 <tr key={p.id} onClick={() => isMaster && setEditP({ ...p })}>
                   <td style={{ fontWeight: 600 }}>{p.name || "—"}</td>
                   <td style={{ color: "var(--muted)" }}>{p.title || "—"}</td>
                   <td style={{ color: "var(--muted)" }}>{p.email}</td>
                   <td><span className="pill" style={{ color: "var(--brand)", background: "var(--brand-soft)" }}>{ROLE_LABELS[p.role] || p.role}</span></td>
-                  <td style={{ color: "var(--muted)" }}>{p.vertical === "ceo" ? "CEO Office" : p.vertical ? VERTICALS[p.vertical]?.short : "All"}</td>
+                  <td style={{ color: "var(--muted)" }}>{p.vertical === "ceo" ? "CEO Office" : DESKS[p.vertical] ? DESKS[p.vertical] : p.vertical ? VERTICALS[p.vertical]?.short : "All"}</td>
                   <td style={{ color: "var(--muted)" }}>{p.cluster || "—"}</td>
                 </tr>
               ))}
@@ -177,6 +181,12 @@ export default function AdminPage() {
                   {VERTICAL_KEYS.map((k) => <option key={k} value={k}>{VERTICALS[k].short}</option>)}
                 </select></div>
             )}
+            {editP.role === "external" && (
+              <div className="field"><label>Agency desk</label>
+                <select value={editP.desk ?? (editP.vertical in DESKS ? editP.vertical : "pr_desk")} onChange={(e) => setEditP({ ...editP, desk: e.target.value })}>
+                  {Object.entries(DESKS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select></div>
+            )}
             {editP.role === "cluster_head" && (
               <div className="field"><label>Cluster</label>
                 <select value={editP.cluster ?? ""} onChange={(e) => setEditP({ ...editP, cluster: e.target.value })}>
@@ -215,6 +225,12 @@ export default function AdminPage() {
               <div className="field"><label>Vertical</label>
                 <select value={addP.vertical ?? ""} onChange={(e) => setAddP({ ...addP, vertical: e.target.value })}>
                   {VERTICAL_KEYS.map((k) => <option key={k} value={k}>{VERTICALS[k].short}</option>)}
+                </select></div>
+            )}
+            {addP.role === "external" && (
+              <div className="field"><label>Agency desk</label>
+                <select value={addP.desk ?? (addP.vertical in DESKS ? addP.vertical : "pr_desk")} onChange={(e) => setAddP({ ...addP, desk: e.target.value })}>
+                  {Object.entries(DESKS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </select></div>
             )}
             {addP.role === "cluster_head" && (

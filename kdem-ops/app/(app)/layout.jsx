@@ -4,8 +4,9 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutGrid, ListTodo, CalendarDays, Presentation, ShieldCheck,
-  Moon, Sun, LogOut, FileDown, UserRound, Search,
+  Moon, Sun, LogOut, FileDown, UserRound, Search, MessagesSquare, FolderOpen, Briefcase,
 } from "lucide-react";
+import { useUnread } from "@/lib/comms";
 import { supabase } from "@/lib/supabase";
 import { AppCtx, buildPerms } from "@/lib/ctx";
 import { VERTICALS, VERTICAL_KEYS, FYS, DEFAULT_FY, THEMES, CLUSTER_TABS, cShort, applyTheme } from "@/lib/schemas";
@@ -91,9 +92,25 @@ export default function AppLayout({ children }) {
     return () => { alive = false; sub.subscription.unsubscribe(); };
   }, [router]);
 
-  if (loading) return <div className="login-wrap" style={{ color: "var(--faint)" }}>Loading…</div>;
+  return <Shell {...{ profile, loading, dark, setDark, fy, setFy, menu, setMenu, report, setReport, search, setSearch,
+    toast, notify, refreshProfile, menuRef, router, pathname, teamTheme, myTheme, setMyTheme }}>{children}</Shell>;
+}
 
+// Split out so hooks that need the profile (unread counts) run after it loads
+function Shell({ children, profile, loading, dark, setDark, fy, setFy, menu, setMenu, report, setReport, search, setSearch,
+  toast, notify, refreshProfile, menuRef, router, pathname, teamTheme, myTheme, setMyTheme }) {
+  const unread = useUnread(loading ? null : profile);
+  const unreadTotal = Object.values(unread).reduce((a, n) => a + n, 0);
   const perms = buildPerms(profile);
+  // Agency accounts live on their desk (and messages) only
+  const externalAllowed = (p) => p.startsWith("/desk") || p.startsWith("/comms") || p.startsWith("/me");
+  useEffect(() => {
+    if (!loading && perms.isExternal && !externalAllowed(pathname)) router.replace("/desk");
+  }, [loading, perms.isExternal, pathname, router]);
+
+  if (loading) return <div className="login-wrap" style={{ color: "var(--faint)" }}>Loading…</div>;
+  if (perms.isExternal && !externalAllowed(pathname)) return null;
+
   const initials = (profile?.name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const active = (href) => pathname === href || pathname.startsWith(href + "/");
 
@@ -104,6 +121,9 @@ export default function AppLayout({ children }) {
     pathname.startsWith("/meetings") ? "Meetings" :
     pathname.startsWith("/db") ? "Database" :
     pathname.startsWith("/me") ? "My space" :
+    pathname.startsWith("/comms") ? "Communications" :
+    pathname.startsWith("/resources") ? "Resources" :
+    pathname.startsWith("/desk") ? "Agency desk" :
     pathname.startsWith("/admin") ? "Admin" : "All Verticals";
 
   return (
@@ -115,6 +135,16 @@ export default function AppLayout({ children }) {
             <div className="title">OneView</div>
             <div className="sub">Operations Centre</div>
           </div>
+          {perms.isExternal ? (
+            <>
+              <div className="navlabel">Workspace</div>
+              <Link href="/desk" className={`navitem ${active("/desk") ? "on" : ""}`}><Briefcase size={16} /> My desk</Link>
+              <Link href="/comms" className={`navitem ${active("/comms") ? "on" : ""}`}>
+                <MessagesSquare size={16} /> <span style={{ flex: 1 }}>Messages</span>
+                {unreadTotal > 0 && <span className="badge">{unreadTotal}</span>}
+              </Link>
+            </>
+          ) : (<>
           <div className="navlabel">Command</div>
           {perms.isCeoLevel && (
             <Link href="/overview" className={`navitem ${active("/overview") ? "on" : ""}`}>
@@ -146,7 +176,7 @@ export default function AppLayout({ children }) {
             <div style={{ paddingLeft: 10 }}>
               {(perms.homeVertical === "bb"
                 ? [["overview", "Overview"], ["all", "All clusters"], ...CLUSTER_TABS.map((c) => [c, cShort(c)]),
-                   ["policies", "Policies"], ["metrics", "Numbers"], ["database", "Database"]]
+                   ["policies", "Policies"], ["database", "Database"]]
                 : [["overview", "Overview"],
                    ...VERTICALS[perms.homeVertical].tabs.map((t) => [t.viewKey || t.key, t.label])]
               ).map(([k, l]) => (
@@ -157,14 +187,23 @@ export default function AppLayout({ children }) {
               ))}
             </div>
           )}
-          {perms.isCeoLevel && (
+          <div className="navlabel">Team space</div>
+          <Link href="/comms" className={`navitem ${active("/comms") ? "on" : ""}`}>
+            <MessagesSquare size={16} /> <span style={{ flex: 1 }}>Communications</span>
+            {unreadTotal > 0 && <span className="badge">{unreadTotal}</span>}
+          </Link>
+          <Link href="/resources" className={`navitem ${active("/resources") ? "on" : ""}`}>
+            <FolderOpen size={16} /> Resources
+          </Link>
+          {perms.isMaster && (
             <>
               <div className="navlabel">System</div>
               <Link href="/admin" className={`navitem ${active("/admin") ? "on" : ""}`}>
-                <ShieldCheck size={16} /> {perms.isMaster ? "Admin" : "Team"}
+                <ShieldCheck size={16} /> Admin
               </Link>
             </>
           )}
+          </>)}
         </aside>
 
         <div className="main">
@@ -172,9 +211,11 @@ export default function AppLayout({ children }) {
             <div className="pagetitle">{pageTitle}</div>
             <div className="fychip">FY {fy}</div>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 9 }} ref={menuRef}>
-              <button className="btn ghost" onClick={() => setSearch(true)} title="Search everything (⌘K)">
-                <Search size={15} />
-              </button>
+              {!perms.isExternal && (
+                <button className="btn ghost" onClick={() => setSearch(true)} title="Search everything (⌘K)">
+                  <Search size={15} />
+                </button>
+              )}
               <button className="avatarbtn" onClick={() => setMenu((m) => !m)}>{initials}</button>
               {menu && (
                 <div className="menu">
@@ -185,9 +226,11 @@ export default function AppLayout({ children }) {
                   <Link href="/me" className="menuitem" onClick={() => setMenu(false)}>
                     <UserRound size={15} /> My space
                   </Link>
-                  <button className="menuitem" onClick={() => { setMenu(false); setReport(true); }}>
-                    <FileDown size={15} /> Download report
-                  </button>
+                  {!perms.isExternal && (
+                    <button className="menuitem" onClick={() => { setMenu(false); setReport(true); }}>
+                      <FileDown size={15} /> Download report
+                    </button>
+                  )}
                   <div style={{ fontSize: 10.5, color: "var(--faint)", padding: "8px 11px 3px", fontWeight: 700, letterSpacing: ".05em" }}>FINANCIAL YEAR</div>
                   <div className="fyopt">
                     {FYS.map((f) => (

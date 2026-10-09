@@ -6,6 +6,7 @@ import { useApp } from "@/lib/ctx";
 import { BB_CLUSTERS, CONTACT_COLS, dbTabs, isExpansion, isLanded, isPipeline, vColor, vName } from "@/lib/schemas";
 import { exportCSV, parseCSV } from "@/lib/csv";
 import { RecordModal } from "./DataTable";
+import { useSort } from "@/lib/sort";
 
 const TAB_LABEL = {
   datacentres: "Data centres", investments: "ESDM investments", startups: "Startups",
@@ -108,6 +109,11 @@ export default function ContactsDirectory({ vertical, accentColor }) {
     [c.name, c.company, c.designation, c.cluster, c.phone, c.email, c.source].some((x) => String(x || "").toLowerCase().includes(s)));
   const shownCompanies = !q ? companies : companies.filter((c) =>
     [c.name, c.sector, ...c.clusters, ...c.sources].some((x) => String(x || "").toLowerCase().includes(s)));
+
+  const cs = useSort(shownContacts, { contact: (c) => c.phone || c.email || c.linkedin });
+  const ks = useSort(shownCompanies, {
+    cluster: (c) => [...c.clusters].join(", "), from: (c) => [...c.sources, ...(c.manual ? ["Directory"] : [])].join(", "),
+  });
 
   // ---------- writes ----------
   async function saveManual(tabDef, form, row) {
@@ -228,9 +234,9 @@ export default function ContactsDirectory({ vertical, accentColor }) {
         shownContacts.length === 0 ? <div className="empty">No contacts yet.</div> : (
           <div className="tablewrap">
             <table className="data">
-              <thead><tr><th>Name</th><th>Company</th><th>Designation</th><th>Cluster</th><th>Contact</th><th>From</th></tr></thead>
+              <thead><tr><th {...cs.th("name")}>Name</th><th {...cs.th("company")}>Company</th><th {...cs.th("designation")}>Designation</th><th {...cs.th("cluster")}>Cluster</th><th {...cs.th("contact")}>Contact</th><th {...cs.th("source")}>From</th></tr></thead>
               <tbody>
-                {shownContacts.map((c) => (
+                {cs.sorted.map((c) => (
                   <tr key={`${c.manual ? "m" : "d"}-${c.id}`} onClick={() => openContact(c)}>
                     <td style={{ fontWeight: 600 }}>{c.name}</td>
                     <td style={{ color: "var(--muted)" }}>{c.company || "—"}</td>
@@ -258,9 +264,9 @@ export default function ContactsDirectory({ vertical, accentColor }) {
         shownCompanies.length === 0 ? <div className="empty">No companies yet.</div> : (
           <div className="tablewrap">
             <table className="data">
-              <thead><tr><th>Company</th><th>Cluster</th><th>Found in</th><th style={{ textAlign: "right" }}>Contacts</th><th>Sector / status</th></tr></thead>
+              <thead><tr><th {...ks.th("name")}>Company</th><th {...ks.th("cluster")}>Cluster</th><th {...ks.th("from")}>Found in</th><th {...ks.th("contacts", { style: { textAlign: "right" } })}>Contacts</th><th {...ks.th("sector")}>Sector / status</th></tr></thead>
               <tbody>
-                {shownCompanies.map((c) => (
+                {ks.sorted.map((c) => (
                   <tr key={c.key} onClick={() => openCompany(c)}>
                     <td style={{ fontWeight: 600 }}>{c.name}</td>
                     <td style={{ color: "var(--muted)" }}>{[...c.clusters].join(", ") || "—"}</td>

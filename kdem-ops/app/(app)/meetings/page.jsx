@@ -1,18 +1,25 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Trash2, Video, MapPin, Link2, FileDown } from "lucide-react";
+import { Plus, Trash2, Video, MapPin, Link2, FileDown, CalendarPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
 import { SCOPES, vColor, vName } from "@/lib/schemas";
 import { generateMoM } from "@/lib/mom";
 import Modal from "@/components/Modal";
 import Pill from "@/components/Pill";
+import Attachments from "@/components/Attachments";
+import { useSort } from "@/lib/sort";
+import { outlookAccount, pushMeeting, deleteOutlookEvent, meetingICS } from "@/lib/outlook";
 
 export default function MeetingsPage() {
   const { notify, profile } = useApp();
   const [rows, setRows] = useState([]);
   const [team, setTeam] = useState([]);
   const [editing, setEditing] = useState(null);
+  const { sorted, th } = useSort(rows, {
+    date: (m) => (m.date ? `${m.date} ${m.time || ""}` : ""), verticals: (m) => (m.verticals || []).join(", "),
+    people: (m) => (m.participants || []).length,
+  });
 
   const load = useCallback(async () => {
     const [m, p] = await Promise.all([
@@ -33,7 +40,7 @@ export default function MeetingsPage() {
   async function save(f, id) {
     const payload = {
       title: f.title, kind: f.kind, mode: f.mode,
-      date: f.date || null, time: f.time || "",
+      date: f.date || null, time: f.time || "", end_time: f.end_time || "",
       venue: f.mode === "in_person" ? (f.venue || "") : "",
       link: f.mode === "online" ? (f.link || "") : "",
       verticals: f.verticals || [], participants: f.participants || [],
@@ -43,10 +50,27 @@ export default function MeetingsPage() {
       ? await supabase.from("meetings").update(payload).eq("id", id)
       : await supabase.from("meetings").insert([payload]).select().single();
     if (res.error) { notify(res.error.message); return null; }
-    notify("Saved"); load();
-    return res.data;
+    const saved = res.data || { ...f, ...payload, id };
+    // Mirror into the saver's Outlook when they've connected it (Calendar page)
+    try {
+      if (saved.date && (await outlookAccount())) {
+        const ids = { ...(f.outlook_ids || {}) };
+        const evId = await pushMeeting(saved, ids[profile.id]);
+        if (evId && evId !== ids[profile.id]) {
+          ids[profile.id] = evId;
+          await supabase.from("meetings").update({ outlook_ids: ids }).eq("id", saved.id);
+        }
+        saved.outlook_ids = ids;
+        notify("Saved · in your Outlook");
+      } else notify("Saved");
+    } catch (e) { notify(`Saved — Outlook: ${e.message}`); }
+    load();
+    return saved;
   }
   async function remove(id) {
+    const m = rows.find((r) => r.id === id);
+    const mine = m?.outlook_ids?.[profile.id];
+    if (mine && (await outlookAccount().catch(() => null))) await deleteOutlookEvent(mine);
     const { error } = await supabase.from("meetings").delete().eq("id", id);
     notify(error ? error.message : "Deleted"); setEditing(null); load();
   }
@@ -72,9 +96,9 @@ export default function MeetingsPage() {
         ) : (
           <div className="tablewrap">
             <table className="data">
-              <thead><tr><th>Meeting</th><th>Kind</th><th>Mode</th><th>Date</th><th>Verticals</th><th>People</th></tr></thead>
+              <thead><tr><th {...th("title")}>Meeting</th><th {...th("kind")}>Kind</th><th {...th("mode")}>Mode</th><th {...th("date")}>Date</th><th {...th("verticals")}>Verticals</th><th {...th("people")}>People</th></tr></thead>
               <tbody>
-                {rows.map((m) => (
+                {sorted.map((m) => (
                   <tr key={m.id} onClick={() => setEditing(m)}>
                     <td style={{ fontWeight: 600 }}>{m.title}</td>
                     <td><Pill value={m.kind} /></td>
@@ -129,6 +153,7 @@ function MeetingModal({ meeting, team, onSave, onDelete, onClose, notify }) {
   async function persist(stayOpen) {
     if (!f.title) return null;
     const saved = await onSave(f, id);
+    if (saved?.outlook_ids) set("outlook_ids", saved.outlook_ids); // so a second save updates, not duplicates
     const mid = id || saved?.id || null;
     if (!id && mid) setId(mid);
     if (!stayOpen) onClose();
@@ -158,6 +183,11 @@ function MeetingModal({ meeting, team, onSave, onDelete, onClose, notify }) {
               <Trash2 size={13} /> Delete
             </button>
           )}
+          {id && f.date && (
+            <button className="btn sm" title="Download an invite for Outlook, Google or Apple Calendar" onClick={() => meetingICS({ ...f, id })}>
+              <CalendarPlus size={13} /> .ics
+            </button>
+          )}
           {id && (
             <button className="btn sm" onClick={() => generateMoM(f, linkedTasks, team)}>
               <FileDown size={13} /> Download MoM
@@ -181,7 +211,11 @@ function MeetingModal({ meeting, team, onSave, onDelete, onClose, notify }) {
         <div className="field"><label>Date</label>
           <input type="date" value={f.date ?? ""} onChange={(e) => set("date", e.target.value)} /></div>
         <div className="field"><label>Time</label>
-          <input type="time" value={f.time ?? ""} onChange={(e) => set("time", e.target.value)} /></div>
+          <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+            <input type="time" value={f.time ?? ""} onChange={(e) => set("time", e.target.value)} />
+            <span style={{ color: "var(--faint)", fontSize: 12 }}>to</span>
+            <input type="time" value={f.end_time ?? ""} onChange={(e) => set("end_time", e.target.value)} />
+          </div></div>
         <div className="field" style={{ gridColumn: "1 / -1" }}><label>Chaired by</label>
           <input placeholder="Dr. N Manjula, IAS — Secretary, Dept of IT BT & ST, GoK"
             value={f.chaired_by ?? ""} onChange={(e) => set("chaired_by", e.target.value)} /></div>
@@ -223,6 +257,8 @@ function MeetingModal({ meeting, team, onSave, onDelete, onClose, notify }) {
           value={f.externals ?? ""} onChange={(e) => set("externals", e.target.value)} /></div>
       <div className="field"><label>Minutes</label>
         <textarea style={{ minHeight: 110 }} value={f.minutes ?? ""} onChange={(e) => set("minutes", e.target.value)} /></div>
+
+      <Attachments folder="meetings" id={id} ensureId={() => persist(true)} notify={notify} />
 
       <div className="subhead">Next steps → tasks</div>
       {linkedTasks.map((t) => (

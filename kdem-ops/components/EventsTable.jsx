@@ -6,6 +6,7 @@ import { useApp } from "@/lib/ctx";
 import { SCOPES, EVENT_TYPES, BB_CLUSTERS, vName, vColor } from "@/lib/schemas";
 import Modal from "./Modal";
 import Pill from "./Pill";
+import { useSort } from "@/lib/sort";
 
 /**
  * Events planner. Sub-tabs: Internal (our Pre-BTS cluster events, with
@@ -65,6 +66,7 @@ export default function EventsTable({ vertical = "mkt", clusterFilter = null, ve
   const shown = showSubs
     ? rows.filter((e) => (sub === "internal" ? e.type === "Pre-BTS Cluster" : e.type !== "Pre-BTS Cluster"))
     : rows;
+  const { sorted, th } = useSort(shown, { date: (e) => (e.date ? `${e.date} ${e.time || ""}` : "") });
 
   return (
     <div className="card">
@@ -93,9 +95,9 @@ export default function EventsTable({ vertical = "mkt", clusterFilter = null, ve
       ) : (
         <div className="tablewrap">
           <table className="data">
-            <thead><tr><th>Event</th><th>Type</th>{!clusterFilter && <th>Cluster</th>}<th>Date</th><th>Location</th><th>Status</th></tr></thead>
+            <thead><tr><th {...th("name")}>Event</th><th {...th("type")}>Type</th>{!clusterFilter && <th {...th("cluster")}>Cluster</th>}<th {...th("date")}>Date</th><th {...th("location")}>Location</th><th {...th("status")}>Status</th></tr></thead>
             <tbody>
-              {shown.map((e) => (
+              {sorted.map((e) => (
                 <tr key={e.id} onClick={() => setEditing(e)}>
                   <td style={{ fontWeight: 600 }}>{e.name}</td>
                   <td style={{ color: "var(--muted)" }}>{e.type}</td>
