@@ -484,7 +484,7 @@ insert into events (name, vertical, type, cluster, date, end_date, location, sta
 ('Mangaluru Technovanza','mkt','Pre-BTS Cluster','Mangaluru','2026-09-22','2026-09-23','Mangaluru','done','2026-27','H1 — cluster event held. Mangaluru Talent Landscape Report, AI Governance for Indian Startups report, BB BLUE Mangaluru Top 3'),
 ('Kalaburagi Techxplore','mkt','Pre-BTS Cluster','Kalaburagi',null,null,'Kalaburagi','planned','2026-27','H2 — remaining cluster event'),
 ('Tumakuru Techpulse','mkt','Pre-BTS Cluster','Tumakuru',null,null,'Tumakuru','planned','2026-27','H2 — remaining cluster event'),
-('Shivamogga Tech Rise','mkt','Pre-BTS Cluster','Shivamogga',null,null,'Shivamogga','planned','2026-27','H2 — remaining cluster event'),
+('Davanagere Tech Rise','mkt','Pre-BTS Cluster','Davanagere',null,null,'Davanagere','planned','2026-27','H2 — remaining cluster event'),
 -- Summits & flagship
 ('World FinTech Summit','mkt','Domestic',null,'2026-05-05','2026-05-06','Bengaluru','done','2026-27','H1 — 7+ fintech leads; Fintech CoE branded at the event'),
 ('Global Fintech Fest','mkt','International',null,'2026-09-09','2026-09-10','Mumbai','done','2026-27','H1 — 20+ company pipeline; 20+ angel investors for fintech'),

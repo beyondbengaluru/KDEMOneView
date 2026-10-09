@@ -39,7 +39,7 @@ $$;
 create or replace function public.bb_clusters() returns text[]
 language sql immutable as $$
   select array['Mysuru','Mangaluru','Hubballi-Dharwad-Belagavi','Kalaburagi',
-               'Tumakuru','Shivamogga','Davanagere','Cluster TBD']
+               'Tumakuru','Davanagere','Cluster TBD']
 $$;
 
 -- Row-level rights for shared/mirrored records:

@@ -4,10 +4,10 @@
 // filter), so one entry mirrors everywhere it belongs.
 // ============================================================
 
-export const CLUSTERS = ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi", "Tumakuru", "Shivamogga", "Davanagere", "Cluster TBD"];
+export const CLUSTERS = ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi", "Tumakuru", "Davanagere", "Cluster TBD"];
 // Everything outside Bengaluru counts toward Beyond Bengaluru. "Cluster TBD"
 // holds BB leads whose cluster isn't decided yet — they count, but get no tab.
-export const BB_CLUSTERS = ["Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi", "Tumakuru", "Shivamogga", "Davanagere", "Cluster TBD"];
+export const BB_CLUSTERS = ["Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi", "Tumakuru", "Davanagere", "Cluster TBD"];
 export const CLUSTER_TABS = BB_CLUSTERS.filter((c) => c !== "Cluster TBD");
 export const HEAD_CLUSTERS = ["Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi"];
 export const SHORT_CLUSTER = { "Hubballi-Dharwad-Belagavi": "HDB" };
@@ -155,6 +155,7 @@ export const METRICS = {
     "Press releases", "Monthly newsletters", "CSR committed (₹ Cr)", "Fintech company leads",
     "Fintech company pipeline", "Fintech angel investors"],
 };
+export const METRIC_TAB = "metrics";
 export const metricsTab = (home) => ({
   key: "metrics", label: "Numbers", home,
   sub: "Totals that aren't tracked row by row. Add a new row to update — the latest date wins.",
@@ -212,6 +213,27 @@ const JOBS = {
   ],
 };
 
+
+// External agencies (role 'external', vertical = desk key) see only their desk.
+export const DESKS = { pr_desk: "PR agency", digital_desk: "Digital media agency" };
+const deskTab = (key, label, kinds) => ({
+  key, label, home: "mkt", hasDocs: true,
+  sub: "Shared with the agency — briefs, drafts and sign-off. Attach files to any item.",
+  columns: [
+    { key: "name", label: "Item", type: "text" },
+    { key: "kind", label: "Type", type: "select", options: kinds },
+    { key: "status", label: "Status", type: "select", options: ["Requested", "In progress", "For review", "Approved", "Published", "On hold"] },
+    { key: "due", label: "Due", type: "date" },
+    { key: "owner", label: "Owner", type: "text" },
+    { key: "link", label: "Link", type: "text" },
+    { key: "notes", label: "Notes / feedback", type: "textarea" },
+  ],
+});
+export const DESK_TABS = {
+  pr_desk: deskTab("pr_desk", "PR agency", ["Press release", "Media interview", "Op-ed", "Coverage report", "Media list", "Event PR", "Other"]),
+  digital_desk: deskTab("digital_desk", "Digital media agency", ["Post", "Reel / video", "Carousel", "Campaign", "Newsletter", "Analytics report", "Other"]),
+};
+
 const STARTUPS = {
   key: "startups", label: "Startups", home: "sni", hasContact: true,
   columns: [
@@ -227,7 +249,7 @@ const STARTUPS = {
 export const VERTICALS = {
   itgcc: {
     name: "IT / ITeS / GCC", short: "IT & GCC", color: "#3457E0",
-    tabs: [GCCS, ITCOS, DATACENTRES, policyHub(["IT Policy", "GCC Policy"]), roadshows("itgcc"), metricsTab("itgcc"), DATABASE_TAB, PROPOSALS],
+    tabs: [GCCS, ITCOS, DATACENTRES, policyHub(["IT Policy", "GCC Policy"]), roadshows("itgcc"), DATABASE_TAB, PROPOSALS],
   },
   esdm: {
     name: "ESDM", short: "ESDM", color: "#0E8F86",
@@ -254,7 +276,6 @@ export const VERTICALS = {
           { key: "notes", label: "Notes", type: "textarea" },
         ]},
       policyHub(["ESDM Policy"]),
-      metricsTab("esdm"),
       DATABASE_TAB,
       PROPOSALS,
     ],
@@ -281,7 +302,6 @@ export const VERTICALS = {
           { key: "notes", label: "Notes", type: "textarea" },
         ]},
       policyHub(["Startup Policy"]),
-      metricsTab("sni"),
       DATABASE_TAB,
       PROPOSALS,
     ],
@@ -289,7 +309,7 @@ export const VERTICALS = {
   bb: {
     name: "Beyond Bengaluru", short: "Beyond Bengaluru", color: "#B07A1E",
     isBB: true,
-    tabs: [policyHub(null), metricsTab("bb"), DATABASE_TAB, PROPOSALS],
+    tabs: [policyHub(null), DATABASE_TAB, PROPOSALS],
   },
   talent: {
     name: "Talent Accelerator", short: "Talent", color: "#2E9E44",
@@ -311,7 +331,6 @@ export const VERTICALS = {
           ...CONTACT_COLS,
           { key: "notes", label: "Notes", type: "textarea" },
         ]},
-      metricsTab("talent"),
       DATABASE_TAB,
       PROPOSALS,
     ],
@@ -338,7 +357,8 @@ export const VERTICALS = {
           { key: "date", label: "Date", type: "date" },
           { key: "notes", label: "Notes", type: "textarea" },
         ]},
-      metricsTab("mkt"),
+      DESK_TABS.pr_desk,
+      DESK_TABS.digital_desk,
       DATABASE_TAB,
       PROPOSALS,
     ],
@@ -399,13 +419,14 @@ export const vColor = (k) => SCOPE_META[k]?.color || VERTICALS[k]?.color || "#5B
 export const EVENT_TYPES = ["Pre-BTS Cluster", "Summit", "International", "Domestic", "Other"];
 
 // Designations
-export const ROLE_LABELS = { master: "Master", ceo: "CEO Office", lead: "Lead", member: "Member", cluster_head: "Cluster Head" };
+export const ROLE_LABELS = { master: "Master", ceo: "CEO Office", lead: "Lead", member: "Member", cluster_head: "Cluster Head", external: "External agency" };
 export const DESIGNATIONS = {
   ceo_office: ["CEO", "CAO", "HR", "Associate", "Fellow", "HR Admin"],
   vertical: ["VP", "Associate", "Fellow", "Intern"],
 };
 export const designationsFor = (role) =>
-  role === "ceo" || role === "master" ? DESIGNATIONS.ceo_office : DESIGNATIONS.vertical;
+  role === "ceo" || role === "master" ? DESIGNATIONS.ceo_office
+    : role === "external" ? ["Account lead", "Manager", "Executive", "Designer", "Writer"] : DESIGNATIONS.vertical;
 
 export const PILL_COLORS = {
   Prospect: "#8B978F", Engaged: "#B07A1E", Committed: "#3457E0",
@@ -415,6 +436,7 @@ export const PILL_COLORS = {
   "Not started": "#8B978F", "In progress": "#3457E0", Done: "#1F8A4C", "On hold": "#C24040",
   "LOI Received": "#B07A1E", Approved: "#3457E0", Disbursed: "#1F8A4C", Rejected: "#C24040", "KITS allocation": "#7A5AF8",
   Selected: "#3457E0", Active: "#1F8A4C", Graduated: "#7A5AF8",
+  Requested: "#B07A1E", "For review": "#7A5AF8", Published: "#1F8A4C",
   Planned: "#B07A1E", Confirmed: "#3457E0", Open: "#B07A1E",
   planned: "#B07A1E", confirmed: "#3457E0", done: "#1F8A4C", cancelled: "#C24040",
   todo: "#8B978F", inprogress: "#3457E0", high: "#C24040", medium: "#B07A1E", low: "#1F8A4C",
@@ -423,7 +445,7 @@ export const PILL_COLORS = {
   Drafting: "#8B978F", "Submitted to KITS": "#3457E0", "In execution": "#7A5AF8", Delivered: "#1F8A4C",
   internal: "#3457E0", external: "#B07A1E", in_person: "#1F8A4C", online: "#3457E0",
   "Active in Karnataka": "#1F8A4C", "Past engagement": "#8B978F",
-  master: "#B03050", ceo: "#B07A1E", lead: "#3457E0", member: "#8B978F", cluster_head: "#0E8F86",
+  master: "#B03050", ceo: "#B07A1E", lead: "#3457E0", member: "#8B978F", cluster_head: "#0E8F86", external: "#E06B2D",
 };
 
 // [key, label, hex] — the Master picks the team default; anyone can pick
@@ -478,8 +500,8 @@ export const COUNTERS = {
       calc: (H) => H.count("itgcc", "datacentres", (d) => ["Pipeline", "MoU", "Grounded"].includes(d.stage)),
       extra: (H) => { const n = H.count("itgcc", "datacentres", (d) => d.cls === "Yes"); return n ? `+ ${n} cable landing stations` : ""; } },
     { label: "Roadshows done", tab: "roadshows", goal: 6, calc: (H) => H.count("itgcc", "roadshows", (d) => d.status === "Done") },
-    { label: "GCC pipeline", tab: "metrics", calc: (H) => H.metric("itgcc", "GCC pipeline") },
-    { label: "GCC partners onboarded", tab: "metrics", calc: (H) => H.metric("itgcc", "GCC partners onboarded") },
+    { label: "GCC pipeline", metric: "GCC pipeline", calc: (H) => H.metric("itgcc", "GCC pipeline") },
+    { label: "GCC partners onboarded", metric: "GCC partners onboarded", calc: (H) => H.metric("itgcc", "GCC partners onboarded") },
   ],
   esdm: [
     { label: "Investment closed", unit: "₹Cr", tab: "investments", goal: 6000, calc: (H) => H.sum("esdm", "investments", "value", (d) => d.stage === "Closed") },
@@ -487,7 +509,7 @@ export const COUNTERS = {
     { label: "Live pipeline", unit: "₹Cr", tab: "investments", goal: 8000, calc: (H) => H.sum("esdm", "investments", "value", (d) => !["Dropped", "Closed"].includes(d.stage)) },
     { label: "Global roadshows", tab: "roadshows", goal: 3, calc: (H) => H.count("esdm", "roadshows", (d) => d.kind === "International" && d.status === "Done") },
     { label: "Industry roundtables", tab: "roadshows", goal: 4, calc: (H) => H.count("esdm", "roadshows", (d) => d.kind === "Industry roundtable" && d.status === "Done") },
-    { label: "Companies in disbursement", tab: "metrics", calc: (H) => H.metric("esdm", "Companies in disbursement") },
+    { label: "Companies in disbursement", metric: "Companies in disbursement", calc: (H) => H.metric("esdm", "Companies in disbursement") },
   ],
   bb: [
     { label: "New companies", sec: "new", goal: 30,
@@ -501,30 +523,42 @@ export const COUNTERS = {
   ],
   talent: [
     { label: "NIPUNA students covered", tab: "programs", goal: 15000, calc: (H) => H.sum("talent", "programs", "trained", (d) => d.scheme === "NIPUNA" && d.status === "Done") },
-    { label: "Women connected", tab: "metrics", goal: 1000, calc: (H) => H.metric("talent", "Women connected (Women@Work)") },
+    { label: "Women connected", metric: "Women connected (Women@Work)", goal: 1000, calc: (H) => H.metric("talent", "Women connected (Women@Work)") },
     { label: "CHRO roundtables", tab: "programs", goal: 2, calc: (H) => H.count("talent", "programs", (d) => d.scheme === "CHRO Roundtable" && d.status === "Done") },
     { label: "NIPUNA approved pipeline", tab: "programs", calc: (H) => H.sum("talent", "programs", "trained", (d) => d.scheme === "NIPUNA" && d.status === "In progress") },
     { label: "Women@Work jobs & internships", tab: "programs", calc: (H) => H.sum("talent", "programs", "placed", (d) => d.scheme === "Women@Work") },
     { label: "Industry LOIs", tab: "partnerships", goal: 25, calc: (H) => H.count("talent", "partnerships") },
   ],
   sni: [
-    { label: "Startups registered", tab: "metrics", goal: 1000, calc: (H) => H.metric("sni", "Startups registered on Startup Karnataka") },
+    { label: "Startups registered", metric: "Startups registered on Startup Karnataka", goal: 1000, calc: (H) => H.metric("sni", "Startups registered on Startup Karnataka") },
     { label: "Seed fund mobilised", unit: "₹Cr", tab: "seedfund", goal: 15,
       calc: (H) => Math.round(H.sum("sni", "seedfund", "amount", (d) => d.status !== "KITS allocation") / 10) / 10 },
     { label: "BLUE events held", tab: "programs", goal: 4, calc: (H) => H.count("sni", "programs", (d) => d.program === "BLUE" && d.status === "Graduated") },
-    { label: "Startups engaged", tab: "metrics", calc: (H) => H.metric("sni", "Startups engaged by KDEM") },
-    { label: "Applied for incentives", tab: "metrics", goal: 100, calc: (H) => H.metric("sni", "Startups applied for incentives") },
-    { label: "KAN Cohort 3 applications", tab: "metrics", calc: (H) => H.metric("sni", "KAN Cohort 3 applications") },
+    { label: "Startups engaged", metric: "Startups engaged by KDEM", calc: (H) => H.metric("sni", "Startups engaged by KDEM") },
+    { label: "Applied for incentives", metric: "Startups applied for incentives", goal: 100, calc: (H) => H.metric("sni", "Startups applied for incentives") },
+    { label: "KAN Cohort 3 applications", metric: "KAN Cohort 3 applications", calc: (H) => H.metric("sni", "KAN Cohort 3 applications") },
   ],
   mkt: [
     { label: "LinkedIn followers", tab: "digital", goal: 40000, calc: (H) => H.latest("mkt", "digital", "value", (d) => d.platform === "LinkedIn" && d.metric === "Followers") },
     { label: "Pre-BTS cluster events", tab: "events", goal: 6, calc: (H) => H.events((e) => e.type === "Pre-BTS Cluster" && e.status === "done").length },
-    { label: "Strategic media interactions", tab: "metrics", goal: 100, calc: (H) => H.metric("mkt", "Strategic media interactions") },
-    { label: "Media coverage", tab: "metrics", calc: (H) => H.metric("mkt", "Media coverage") },
+    { label: "Strategic media interactions", metric: "Strategic media interactions", goal: 100, calc: (H) => H.metric("mkt", "Strategic media interactions") },
+    { label: "Media coverage", metric: "Media coverage", calc: (H) => H.metric("mkt", "Media coverage") },
     { label: "Instagram followers", tab: "digital", goal: 1500, calc: (H) => H.latest("mkt", "digital", "value", (d) => d.platform === "Instagram") },
     { label: "YouTube subscribers", tab: "digital", goal: 1200, calc: (H) => H.latest("mkt", "digital", "value", (d) => d.platform === "YouTube") },
   ],
 };
+// Short labels keep the home-page goal cards on one line each, so the
+// progress bars line up across every vertical.
+const SHORT_LABELS = {
+  "GCC expansions": "Expansions", "Data centre pipeline": "DC pipeline", "Investment closed": "Invested",
+  "Jobs from closed deals": "Jobs", "Live pipeline": "Pipeline", "Jobs created": "Jobs",
+  "NIPUNA students covered": "NIPUNA trained", "Women connected": "Women@Work", "CHRO roundtables": "CHRO tables",
+  "Startups registered": "Registered", "Seed fund mobilised": "Seed fund", "BLUE events held": "BLUE events",
+  "LinkedIn followers": "LinkedIn", "Pre-BTS cluster events": "Pre-BTS", "Strategic media interactions": "Media",
+  "New companies": "New cos",
+};
+Object.values(COUNTERS).flat().forEach((c) => { c.short = SHORT_LABELS[c.label] || c.label; });
+
 // The Word report reads `target` as text
 Object.values(COUNTERS).flat().forEach((c) => { c.target = c.goal ? `${c.unit === "₹Cr" ? "₹" : ""}${Number(c.goal).toLocaleString("en-IN")}${c.unit === "₹Cr" ? " Cr" : ""}` : "—"; });
 
@@ -536,6 +570,7 @@ export function buildHelper(records, events) {
     sum: (v, t, f, pred) => rows(v, t, pred).reduce((a, r) => a + (Number(r.data?.[f]) || 0), 0),
     latest: (v, t, f, pred) => Number(newest(rows(v, t, pred), "as_of")[0]?.data?.[f]) || 0,
     metric: (v, name) => Number(newest(rows(v, "metrics", (d) => d.metric === name), "as_of")[0]?.data?.value) || 0,
+    metricDate: (v, name) => newest(rows(v, "metrics", (d) => d.metric === name), "as_of")[0]?.data?.as_of || "",
     events: (pred) => (events || []).filter((e) => (pred ? pred(e) : true)),
   };
 }

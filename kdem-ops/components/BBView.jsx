@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
 import {
   VERTICALS, BB_CLUSTERS, CLUSTER_TABS, BB_SECTIONS, CUSTOM_COL_TYPES,
-  customSection, cShort, metricsTab,
+  customSection, cShort,
 } from "@/lib/schemas";
 import { fmt } from "@/lib/util";
 import Counters from "./Counters";
@@ -108,7 +108,6 @@ export default function BBView() {
           </button>
         ))}
         <button className={`tab ${tab === "policies" ? "on" : ""}`} onClick={() => setTab("policies")}>Policies</button>
-        <button className={`tab ${tab === "metrics" ? "on" : ""}`} onClick={() => setTab("metrics")}>Numbers</button>
         <button className={`tab ${tab === "database" ? "on" : ""}`} onClick={() => setTab("database")}>Database</button>
       </div>
 
@@ -167,8 +166,6 @@ export default function BBView() {
         <PolicyHub vertical="bb" hub={v.tabs[0]} accentColor={v.color}
           extraFilter={(d) => !d.cluster || BB_CLUSTERS.includes(d.cluster)} />
       )}
-
-      {tab === "metrics" && <DataTable pageVertical="bb" tabDef={metricsTab("bb")} accentColor={v.color} />}
 
       {tab === "database" && <ContactsDirectory vertical="bb" accentColor={v.color} />}
 

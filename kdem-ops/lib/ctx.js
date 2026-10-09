@@ -10,9 +10,10 @@ export function buildPerms(profile) {
   const role = profile?.role;
   const isMaster = role === "master";
   const isCeoLevel = role === "master" || role === "ceo";
+  const isExternal = role === "external";   // agency account: only its Marketing desk
 
   const canWrite = (vertical) => {
-    if (!profile) return false;
+    if (!profile || isExternal) return false;
     if (isCeoLevel) return true;
     if (role === "cluster_head") return vertical === "bb";
     return profile.vertical === vertical;
@@ -23,6 +24,7 @@ export function buildPerms(profile) {
   // cluster heads only their own cluster's rows, teams their vertical.
   const canEditRow = (vertical, data = {}) => {
     if (!profile) return false;
+    if (isExternal) return vertical === "mkt";   // RLS limits them to their desk's rows
     if (isCeoLevel) return true;
     if (role === "cluster_head") return (data?.cluster || "") === profile.cluster;
     if (profile.vertical === vertical) return true;
@@ -32,13 +34,13 @@ export function buildPerms(profile) {
 
   // Which vertical pages this person can open
   const canView = (vertical) => {
-    if (!profile) return false;
+    if (!profile || isExternal) return false;
     if (isCeoLevel) return true;
     if (role === "cluster_head") return vertical === "bb";
     return profile.vertical === vertical;
   };
 
-  const homeVertical = isCeoLevel ? null : role === "cluster_head" ? "bb" : profile?.vertical || null;
+  const homeVertical = isCeoLevel || isExternal ? null : role === "cluster_head" ? "bb" : profile?.vertical || null;
 
-  return { isMaster, isCeoLevel, canWrite, canEditRow, canView, homeVertical };
+  return { isMaster, isCeoLevel, isExternal, canWrite, canEditRow, canView, homeVertical };
 }

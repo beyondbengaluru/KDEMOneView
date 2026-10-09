@@ -97,7 +97,7 @@ export default function Overview() {
       <div className="vgrid">
         {VERTICAL_KEYS.map((vk) => {
           const v = VERTICALS[vk];
-          const goals = evalCounters((COUNTERS[vk] || []).slice(0, 3), H);
+          const goals = evalCounters((COUNTERS[vk] || []).slice(0, 3), H, vk);
           return (
             <div key={vk} className="card" style={{ borderTop: `3px solid ${v.color}`, padding: "15px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
               <Link href={`/v/${vk}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -107,13 +107,14 @@ export default function Overview() {
               <div className="goalgrid">
                 {goals.map((n) => (
                   <Link key={n.label} href={goTo(vk, n)} className="goal link">
-                    <div className="gval">
+                    <div className="gval" title={n.extraText || undefined}>
                       {n.unit === "₹Cr" ? `₹${fmt(n.value)}` : fmt(n.value)}
                       {n.unit === "₹Cr" && <span style={{ fontSize: 11, color: "var(--faint)", marginLeft: 3 }}>Cr</span>}
+                      {n.extraText && <sup style={{ fontSize: 10, color: "var(--faint)", marginLeft: 3 }}>+{n.extraText.match(/\d+/)?.[0]}</sup>}
                     </div>
-                    <div className="glbl">{n.label}{n.extraText ? <span style={{ fontWeight: 500, color: "var(--faint)" }}> {n.extraText}</span> : null}</div>
-                    <GoalBar value={n.value} goal={n.goal} color={v.color} />
-                    {n.goal ? <div className="gof">{goalText(n)}</div> : null}
+                    <div className="glbl" title={n.label}>{n.short}</div>
+                    {n.goal ? <GoalBar value={n.value} goal={n.goal} color={v.color} /> : <div className="gbar" style={{ visibility: "hidden" }} />}
+                    <div className="gof">{n.goal ? goalText(n) : "\u00a0"}</div>
                   </Link>
                 ))}
               </div>

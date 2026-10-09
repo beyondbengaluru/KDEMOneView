@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { UserPlus, Palette } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { VERTICALS, VERTICAL_KEYS, HEAD_CLUSTERS, THEMES, applyTheme, isHex, ROLE_LABELS, designationsFor } from "@/lib/schemas";
+import { VERTICALS, VERTICAL_KEYS, HEAD_CLUSTERS, THEMES, DESKS, applyTheme, isHex, ROLE_LABELS, designationsFor } from "@/lib/schemas";
 import Modal from "@/components/Modal";
 
 
@@ -13,6 +13,7 @@ const ROLES = [
   ["lead", "Vertical Lead"],
   ["member", "Vertical Member"],
   ["cluster_head", "BB Cluster Head"],
+  ["external", "External agency (Marketing desk only)"],
 ];
 
 export default function AdminPage() {
@@ -38,7 +39,7 @@ export default function AdminPage() {
   async function saveProfile(f) {
     const { error } = await supabase.from("profiles").update({
       name: f.name, title: f.title || "", role: f.role,
-      vertical: ["lead", "member"].includes(f.role) ? f.vertical : (f.role === "cluster_head" ? "bb" : (f.role === "ceo" ? "ceo" : null)),
+      vertical: ["lead", "member"].includes(f.role) ? f.vertical : f.role === "external" ? (f.desk || "pr_desk") : (f.role === "cluster_head" ? "bb" : (f.role === "ceo" ? "ceo" : null)),
       cluster: f.role === "cluster_head" ? f.cluster : null,
     }).eq("id", f.id);
     notify(error ? error.message : "Saved");
@@ -59,7 +60,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           email: f.email, password: f.password, name: f.name, title: f.title || "",
           role: f.role || "member",
-          vertical: ["lead", "member"].includes(f.role) ? f.vertical : (f.role === "cluster_head" ? "bb" : (f.role === "ceo" ? "ceo" : null)),
+          vertical: ["lead", "member"].includes(f.role) ? f.vertical : f.role === "external" ? (f.desk || "pr_desk") : (f.role === "cluster_head" ? "bb" : (f.role === "ceo" ? "ceo" : null)),
           cluster: f.role === "cluster_head" ? f.cluster : null,
         }),
       });
@@ -116,7 +117,7 @@ export default function AdminPage() {
                   <td style={{ color: "var(--muted)" }}>{p.title || "—"}</td>
                   <td style={{ color: "var(--muted)" }}>{p.email}</td>
                   <td><span className="pill" style={{ color: "var(--brand)", background: "var(--brand-soft)" }}>{ROLE_LABELS[p.role] || p.role}</span></td>
-                  <td style={{ color: "var(--muted)" }}>{p.vertical === "ceo" ? "CEO Office" : p.vertical ? VERTICALS[p.vertical]?.short : "All"}</td>
+                  <td style={{ color: "var(--muted)" }}>{p.vertical === "ceo" ? "CEO Office" : DESKS[p.vertical] ? DESKS[p.vertical] : p.vertical ? VERTICALS[p.vertical]?.short : "All"}</td>
                   <td style={{ color: "var(--muted)" }}>{p.cluster || "—"}</td>
                 </tr>
               ))}
@@ -177,6 +178,12 @@ export default function AdminPage() {
                   {VERTICAL_KEYS.map((k) => <option key={k} value={k}>{VERTICALS[k].short}</option>)}
                 </select></div>
             )}
+            {editP.role === "external" && (
+              <div className="field"><label>Agency desk</label>
+                <select value={editP.desk ?? (editP.vertical in DESKS ? editP.vertical : "pr_desk")} onChange={(e) => setEditP({ ...editP, desk: e.target.value })}>
+                  {Object.entries(DESKS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select></div>
+            )}
             {editP.role === "cluster_head" && (
               <div className="field"><label>Cluster</label>
                 <select value={editP.cluster ?? ""} onChange={(e) => setEditP({ ...editP, cluster: e.target.value })}>
@@ -215,6 +222,12 @@ export default function AdminPage() {
               <div className="field"><label>Vertical</label>
                 <select value={addP.vertical ?? ""} onChange={(e) => setAddP({ ...addP, vertical: e.target.value })}>
                   {VERTICAL_KEYS.map((k) => <option key={k} value={k}>{VERTICALS[k].short}</option>)}
+                </select></div>
+            )}
+            {addP.role === "external" && (
+              <div className="field"><label>Agency desk</label>
+                <select value={addP.desk ?? (addP.vertical in DESKS ? addP.vertical : "pr_desk")} onChange={(e) => setAddP({ ...addP, desk: e.target.value })}>
+                  {Object.entries(DESKS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </select></div>
             )}
             {addP.role === "cluster_head" && (
