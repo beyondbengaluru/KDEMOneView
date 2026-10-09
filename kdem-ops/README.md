@@ -35,31 +35,34 @@ with team + external participants, minutes, and next steps that become real
 tasks (linked, and on the calendar when they have a due date). Tasks can be
 multi-vertical and can be kept off the calendar.
 
-## What's new in v6 — H1 FY 2026-27 loaded
-- **H1 FY 2026-27 actuals** (`supabase/seed_h1_fy2026-27.sql`, 1 Apr – 30 Sep
-  2026) across all six verticals: 26 new GCCs + 14 expansions + the Teksalah
-  Nano GCC; the 21 Beyond Bengaluru companies onboarded (21/30) and 19
-  expansions by cluster and quarter; the 50-company BB pipeline; the 10-strong
-  DC pipeline with 2 cable landing stations; ESDM's ₹3,350 Cr / 1,800 jobs
-  closed (Wipro, Lion Circuits, Avalon, Motherson Sumi) plus the ₹15,000 Cr+
-  live pipeline and the Netherlands → SEMICON follow-ups; NIPUNA's 5,015
-  approved pipeline and Women@Work by cluster; all 30 BLUE startups from the
-  Mysuru, HDB and Mangaluru demo days; the ₹47 Cr Cluster Seed Fund; KAN
-  Cohort 2 & 3; the six Startup X-Factor sessions; digital actuals (LinkedIn
-  39,931) and the 532 media items; and every H1 proposal with its real status.
-- **Safe to re-run**: every row the file writes carries `data->>'src' =
-  'H1-FY2627'` and is deleted before re-insert, so rerunning never duplicates
-  and never touches rows the team added in the app. It also retires the old
-  `(rename)` placeholder rows that H1 now names properly.
-- **Davanagere** joins the Beyond Bengaluru clusters (the H1 report tracks a
-  policy awareness session, the GM University startup policy session and the
-  Women Entrepreneurs Bootcamp there). Like Tumakuru and Shivamogga it has no
-  cluster head yet. Existing databases need `supabase/migrate_v6.sql`.
-- **Known gap**: the H1 report gives Beyond Bengaluru employment only as
-  cluster totals (1,486 — HDB 125 · KBG 50 · MLR 211 · MYS 1,100+), not per
-  company, so per-company `jobs` is left unset rather than invented and the BB
-  "Jobs (landed)" counter under-reports until it's filled in. The bottom of the
-  seed file has a ready UPDATE template and a query listing the rows to fill.
+## What's new in v6
+- **Data is H1 FY 2026-27 only.** `supabase/seed_data.sql` now wipes all
+  tracker rows and events and loads just the H1 report (1 Apr – 30 Sep 2026).
+  Headline totals the report gives without a list (media coverage, startups
+  registered…) live in each vertical's **Numbers** tab — add a dated row to
+  update one; the latest date wins and the history stays.
+- **Goals on the home page.** The first three counters of every vertical are
+  its headline goals; All Verticals shows them as value, goal and a bar, and
+  each one opens the exact tab or section behind it.
+- **Beyond Bengaluru, rebuilt around sections**: New companies, Expansions,
+  Jobs, Pipeline, Data centres, Awareness sessions (then Startups, Policy
+  registrations and your own). Proposals sit at the top of All clusters and
+  each cluster, including other verticals' proposals for that cluster. Empty
+  sections are hidden; **Add section** shows one, or creates a new section
+  with your own columns. Overview tiles jump straight to their section.
+- **Companies are one dataset with `type` (GCC, Nano GCC, IT/ITeS…) and
+  `kind` (New / Expansion).** Move a pipeline company to *Grounded* and it
+  moves itself into New companies or Expansions.
+- **Database = everything.** Each vertical's Database lists contacts and
+  companies added there plus every contact person and company already entered
+  anywhere in the vertical (for BB: anything in a BB cluster). Import contact
+  cards (.vcf) shared from WhatsApp or a phone; duplicates are skipped.
+- **More colours**: 18 presets plus any custom colour for the team (Admin),
+  and everyone can pick their own from the avatar menu. Dark mode numbers fixed.
+- **Ops**: warns before adding a duplicate company, search opens the exact
+  tab/section and also finds contact people, clusters gain **Davanagere** and
+  **Cluster TBD** (BB leads without a cluster yet; counted, no tab).
+- Existing databases: run `supabase/migrate_v6.sql`, then `seed_data.sql`.
 
 ## What's new in v5
 - **Task visibility actually enforced**: if your DB was created before v4,
@@ -126,13 +129,11 @@ multi-vertical and can be kept off the calendar.
 2. SQL Editor → paste all of `supabase/schema.sql` → Run. This is a **fresh v2
    install** — if you ran the earlier v1 schema, use a new project or reset the
    database first.
-3. SQL Editor → paste all of `supabase/seed_data.sql` → Run (pre-fills the
-   pipelines, DC list, ESDM history, proposals and the Database).
-   Then paste all of `supabase/seed_h1_fy2026-27.sql` → Run — this overlays the
-   H1 FY 2026-27 actuals (1 Apr – 30 Sep 2026) and is safe to re-run.
+3. SQL Editor → paste all of `supabase/seed_data.sql` → Run (loads the
+   H1 FY 2026-27 data).
    *Upgrading an existing database?* Run `supabase/migrate_v5.sql` and
-   `supabase/migrate_v6.sql` first — v6 adds Davanagere to the BB cluster lists
-   used by row-level security, which the H1 data needs.
+   `supabase/migrate_v6.sql` first. Note `seed_data.sql` replaces ALL tracker
+   rows and events with the H1 FY 2026-27 data.
 4. Authentication → Users → *Add user* → your own email + password.
 5. SQL Editor:
    `update profiles set role='master', name='Your Name' where email='you@kdem.in';`
@@ -182,8 +183,8 @@ in `app/globals.css` and they'll take over everywhere.
 ```
 lib/schemas.js        ← the control panel: verticals, tabs, columns, mirrors
 supabase/schema.sql   ← tables, row-level security, storage, FY26-27 seeds
-supabase/migrate_v*.sql        ← in-place upgrades for existing databases
-supabase/seed_h1_fy2026-27.sql ← H1 FY 2026-27 actuals (re-runnable)
+supabase/migrate_v*.sql ← in-place upgrades for existing databases
+supabase/seed_data.sql  ← H1 FY 2026-27 data (replaces all tracker data)
 supabase/functions/   ← create-user edge function (Master adds members)
 components/           ← DataTable, ProposalsBoard, BBView, TasksPanel, …
 app/(app)/            ← overview, verticals, tasks, meetings, calendar, admin

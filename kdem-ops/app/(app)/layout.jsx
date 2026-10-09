@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { AppCtx, buildPerms } from "@/lib/ctx";
-import { VERTICALS, VERTICAL_KEYS, FYS, DEFAULT_FY, applyTheme } from "@/lib/schemas";
+import { VERTICALS, VERTICAL_KEYS, FYS, DEFAULT_FY, THEMES, CLUSTER_TABS, cShort, applyTheme } from "@/lib/schemas";
 import ReportModal from "@/components/ReportModal";
 import SearchPalette from "@/components/SearchPalette";
 
@@ -23,6 +23,8 @@ export default function AppLayout({ children }) {
   const [report, setReport] = useState(false);
   const [search, setSearch] = useState(false);
   const [toast, setToast] = useState("");
+  const [teamTheme, setTeamTheme] = useState("emerald");
+  const [myTheme, setMyTheme] = useState(null);
   const menuRef = useRef(null);
 
   const notify = useCallback((msg) => {
@@ -77,7 +79,10 @@ export default function AppLayout({ children }) {
         supabase.from("profiles").select("*").eq("id", data.session.user.id).single(),
         supabase.from("settings").select("value").eq("key", "theme").single(),
       ]);
-      if (theme?.value) applyTheme(theme.value);
+      // The Master sets the team colour; anyone can override it for themselves
+      const mine = localStorage.getItem("kdem-accent");
+      setTeamTheme(theme?.value || "emerald"); setMyTheme(mine);
+      applyTheme(mine || theme?.value || "emerald");
       if (alive) { setProfile(prof); setLoading(false); }
     })();
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
@@ -140,9 +145,8 @@ export default function AppLayout({ children }) {
           {!perms.isCeoLevel && perms.homeVertical && (
             <div style={{ paddingLeft: 10 }}>
               {(perms.homeVertical === "bb"
-                ? [["overview", "Overview"], ["all", "All clusters"], ["Mysuru", "Mysuru"], ["Mangaluru", "Mangaluru"],
-                   ["Hubballi-Dharwad-Belagavi", "HDB"], ["Kalaburagi", "Kalaburagi"], ["Tumakuru", "Tumakuru"],
-                   ["Shivamogga", "Shivamogga"], ["policies", "Policies"], ["database", "Database"], ["proposals", "Proposals"]]
+                ? [["overview", "Overview"], ["all", "All clusters"], ...CLUSTER_TABS.map((c) => [c, cShort(c)]),
+                   ["policies", "Policies"], ["metrics", "Numbers"], ["database", "Database"]]
                 : [["overview", "Overview"],
                    ...VERTICALS[perms.homeVertical].tabs.map((t) => [t.viewKey || t.key, t.label])]
               ).map(([k, l]) => (
@@ -190,6 +194,19 @@ export default function AppLayout({ children }) {
                       <button key={f} className={`chip ${fy === f ? "on" : ""}`} onClick={() => setFy(f)}>FY {f}</button>
                     ))}
                   </div>
+                  <div style={{ fontSize: 10.5, color: "var(--faint)", padding: "8px 11px 5px", fontWeight: 700, letterSpacing: ".05em" }}>MY COLOUR</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 11px 8px" }}>
+                    {THEMES.map(([key, label, hex]) => (
+                      <button key={key} title={label} onClick={() => { localStorage.setItem("kdem-accent", key); setMyTheme(key); applyTheme(key); }}
+                        style={{ width: 22, height: 22, borderRadius: 7, background: hex, border: (myTheme || teamTheme) === key ? "2px solid var(--ink)" : "2px solid transparent" }} />
+                    ))}
+                  </div>
+                  {myTheme && (
+                    <button className="menuitem" style={{ fontSize: 12, color: "var(--muted)" }}
+                      onClick={() => { localStorage.removeItem("kdem-accent"); setMyTheme(null); applyTheme(teamTheme); }}>
+                      Use the team colour
+                    </button>
+                  )}
                   <button className="menuitem" onClick={() => setDark(!dark)}>
                     {dark ? <Sun size={15} /> : <Moon size={15} />} {dark ? "Light mode" : "Dark mode"}
                   </button>

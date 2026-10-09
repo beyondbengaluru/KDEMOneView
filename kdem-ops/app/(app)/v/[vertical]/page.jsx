@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { VERTICALS, dbTabs } from "@/lib/schemas";
+import { VERTICALS } from "@/lib/schemas";
 import Counters from "@/components/Counters";
 import DataTable from "@/components/DataTable";
 import PolicyHub from "@/components/PolicyHub";
@@ -13,6 +13,7 @@ import TasksPanel from "@/components/TasksPanel";
 import MeetingsMini from "@/components/MeetingsMini";
 import ProposalsBoard from "@/components/ProposalsBoard";
 import BBView from "@/components/BBView";
+import ContactsDirectory from "@/components/ContactsDirectory";
 
 export default function VerticalPage() {
   return (
@@ -31,7 +32,6 @@ function VerticalPageInner() {
   const [tab, setTab] = useState("overview");
   const [counts, setCounts] = useState({});
   useEffect(() => { if (urlTab) setTab(urlTab); }, [urlTab]);
-  const [dbTab, setDbTab] = useState("db_companies");
 
   const loadCounts = useCallback(async () => {
     if (!v || v.isBB) return;
@@ -65,7 +65,6 @@ function VerticalPageInner() {
   if (v.isBB) return <BBView />;
 
   const activeTab = v.tabs.find((t) => (t.viewKey || t.key) === tab);
-  const DB_TABS = dbTabs(vertical);
 
   return (
     <>
@@ -89,8 +88,8 @@ function VerticalPageInner() {
       {tab === "overview" ? (
         <>
           <Counters vertical={vertical} color={v.color}
-            onJump={(tabKey) => {
-              const t = v.tabs.find((x) => (x.viewKey || x.key) === tabKey || x.key === tabKey);
+            onJump={(n) => {
+              const t = v.tabs.find((x) => (x.viewKey || x.key) === n.tab || x.key === n.tab);
               if (t) setTab(t.viewKey || t.key);
             }} />
           <TasksPanel vertical={vertical} title={`${v.short} tasks`} />
@@ -104,14 +103,7 @@ function VerticalPageInner() {
       ) : activeTab?.isPolicyHub ? (
         <PolicyHub vertical={vertical} hub={activeTab} accentColor={v.color} />
       ) : activeTab?.isDatabase ? (
-        <div>
-          <div className="subtabs" style={{ padding: "0 0 10px" }}>
-            {DB_TABS.map((t) => (
-              <button key={t.key} className={`stab ${dbTab === t.key ? "on" : ""}`} onClick={() => setDbTab(t.key)}>{t.label}</button>
-            ))}
-          </div>
-          <DataTable pageVertical={vertical} tabDef={DB_TABS.find((t) => t.key === dbTab)} accentColor={v.color} />
-        </div>
+        <ContactsDirectory vertical={vertical} accentColor={v.color} />
       ) : (
         <DataTable pageVertical={vertical} tabDef={activeTab} accentColor={v.color} />
       )}

@@ -34,6 +34,14 @@ as $$
       or (my_role() = 'cluster_head' and v = 'bb')
 $$;
 
+-- Clusters that count toward Beyond Bengaluru (keep in sync with BB_CLUSTERS
+-- in lib/schemas.js). 'Cluster TBD' holds BB leads whose cluster isn't decided.
+create or replace function public.bb_clusters() returns text[]
+language sql immutable as $$
+  select array['Mysuru','Mangaluru','Hubballi-Dharwad-Belagavi','Kalaburagi',
+               'Tumakuru','Shivamogga','Davanagere','Cluster TBD']
+$$;
+
 -- Row-level rights for shared/mirrored records:
 --  • master/ceo: everything
 --  • vertical teams: rows homed in their vertical
@@ -46,7 +54,7 @@ as $$
   select my_role() in ('master','ceo')
       or (my_role() in ('lead','member') and my_vertical() = v)
       or (my_role() in ('lead','member') and my_vertical() = 'bb'
-          and coalesce(d->>'cluster','') in ('Mysuru','Mangaluru','Hubballi-Dharwad-Belagavi','Kalaburagi','Tumakuru','Shivamogga','Davanagere'))
+          and coalesce(d->>'cluster','') = any(bb_clusters()))
       or (my_role() = 'cluster_head' and coalesce(d->>'cluster','') = my_cluster())
       or (v = 'db' and my_role() is not null)   -- the Database is maintained by everyone
 $$;
@@ -173,10 +181,10 @@ create policy "events read"  on events for select to authenticated using (true);
 create policy "events write" on events for all to authenticated
   using ( can_write(vertical)
           or (my_role() = 'cluster_head' and coalesce(cluster,'') = my_cluster())
-          or (my_vertical() = 'bb' and coalesce(cluster,'') in ('Mysuru','Mangaluru','Hubballi-Dharwad-Belagavi','Kalaburagi','Tumakuru','Shivamogga','Davanagere')) )
+          or (my_vertical() = 'bb' and coalesce(cluster,'') = any(bb_clusters())) )
   with check ( can_write(vertical)
           or (my_role() = 'cluster_head' and coalesce(cluster,'') = my_cluster())
-          or (my_vertical() = 'bb' and coalesce(cluster,'') in ('Mysuru','Mangaluru','Hubballi-Dharwad-Belagavi','Kalaburagi','Tumakuru','Shivamogga','Davanagere')) );
+          or (my_vertical() = 'bb' and coalesce(cluster,'') = any(bb_clusters())) );
 
 -- ---------- MEETINGS (internal/external; minutes; next steps → tasks) ----------
 create table public.meetings (
@@ -237,24 +245,8 @@ create trigger meetings_touch before update on meetings for each row execute fun
 
 alter publication supabase_realtime add table records, tasks, events, meetings;
 
--- ============================================================
--- SEED — events. (Every number on the dashboard is computed live from
--- the trackers; there is no KPI table to maintain.)
--- ============================================================
--- Events: 4 globals + 4 Pre-BTS cluster events (mapped to BB too)
-insert into events (name, vertical, type, cluster, date, location, status, fy) values
-('World FinTech Summit', 'mkt', 'International', null, '2026-05-20', 'Bengaluru', 'done', '2026-27'),
-('Global Fintech Festival', 'mkt', 'Domestic', null, '2026-09-15', 'Mumbai', 'planned', '2026-27'),
-('Bengaluru Skill Summit', 'mkt', 'Summit', null, '2026-11-04', 'Bengaluru', 'planned', '2026-27'),
-('Bengaluru Tech Summit (BTS)', 'mkt', 'Summit', null, '2026-11-18', 'BIEC, Bengaluru', 'planned', '2026-27'),
-('Pre-BTS — Mysuru', 'mkt', 'Pre-BTS Cluster', 'Mysuru', '2026-09-10', 'Mysuru', 'planned', '2026-27'),
-('Pre-BTS — Mangaluru', 'mkt', 'Pre-BTS Cluster', 'Mangaluru', '2026-09-24', 'Mangaluru', 'planned', '2026-27'),
-('Pre-BTS — Hubballi-Dharwad-Belagavi', 'mkt', 'Pre-BTS Cluster', 'Hubballi-Dharwad-Belagavi', '2026-10-08', 'Hubballi', 'planned', '2026-27'),
-('Pre-BTS — Kalaburagi', 'mkt', 'Pre-BTS Cluster', 'Kalaburagi', '2026-10-22', 'Kalaburagi', 'planned', '2026-27');
-
--- Trackers, pipelines, DC list, proposals & the Database are pre-filled
--- from your Excel tracker and the ESDM fact sheet:
---   run supabase/seed_data.sql after this file.
+-- Tracker data (H1 FY 2026-27) and events: run supabase/seed_data.sql
+-- after this file.
 
 -- ============================================================
 -- AFTER RUNNING:
@@ -263,6 +255,6 @@ insert into events (name, vertical, type, cluster, date, location, status, fy) v
 -- 2) Deploy the create-user function so Master can add members in-app:
 --    supabase functions deploy create-user
 --    (see supabase/functions/create-user/index.ts and README)
--- 3) Run supabase/seed_data.sql to pre-fill pipelines, DCs, proposals & the Database.
+-- 3) Run supabase/seed_data.sql to load the H1 FY 2026-27 data.
 -- 4) Everything else — team & theme — is managed from the Admin page.
 -- ============================================================

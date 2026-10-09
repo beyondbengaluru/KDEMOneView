@@ -7,18 +7,19 @@ import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
 import { VERTICALS, VERTICAL_KEYS, COUNTERS, buildHelper, vColor, vName } from "@/lib/schemas";
 import { fmt } from "@/lib/util";
+import { evalCounters, GoalBar, goalText } from "@/components/Counters";
 import TasksPanel from "@/components/TasksPanel";
 
 // CEO/Master command view. Vertical members are routed to their own
 // vertical — this cross-vertical view is CEO-office only.
 export default function Overview() {
   const router = useRouter();
-  const { fy, isCeoLevel, homeVertical } = useApp();
+  const { fy, isCeoLevel, homeVertical, profile } = useApp();
   const [records, setRecords] = useState([]);
   const [events, setEvents] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
   const [activity, setActivity] = useState([]);
-  const [counts, setCounts] = useState({ proposals: 0, meetings: 0 });
+  const [counts, setCounts] = useState({ proposals: 0, meetings: 0, openTasks: 0, soon: 0 });
 
   useEffect(() => {
     if (!isCeoLevel && homeVertical) router.replace(`/v/${homeVertical}`);
@@ -26,17 +27,20 @@ export default function Overview() {
 
   const load = useCallback(async () => {
     const today = new Date().toISOString().slice(0, 10);
-    const [r, e, up, act, p, m] = await Promise.all([
+    const in30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+    const [r, e, up, act, p, m, t] = await Promise.all([
       supabase.from("records").select("vertical,tab,data,updated_at").eq("fy", fy),
       supabase.from("events").select("*").eq("fy", fy).neq("status", "cancelled"),
       supabase.from("events").select("*").eq("fy", fy).gte("date", today).neq("status", "cancelled").order("date").limit(6),
       supabase.from("records").select("vertical,tab,data,updated_at").order("updated_at", { ascending: false }).limit(8),
       supabase.from("records").select("id", { count: "exact", head: true }).eq("tab", "proposals").eq("fy", fy),
       supabase.from("meetings").select("id", { count: "exact", head: true }),
+      supabase.from("tasks").select("id", { count: "exact", head: true }).neq("status", "done"),
     ]);
+    const soon = (e.data || []).filter((x) => x.date && x.date >= today && x.date <= in30).length;
     setRecords(r.data || []); setEvents(e.data || []);
     setUpcoming(up.data || []); setActivity(act.data || []);
-    setCounts({ proposals: p.count || 0, meetings: m.count || 0 });
+    setCounts({ proposals: p.count || 0, meetings: m.count || 0, openTasks: t.count || 0, soon });
   }, [fy]);
   useEffect(() => { if (isCeoLevel) load(); }, [load, isCeoLevel]);
 
@@ -58,49 +62,62 @@ export default function Overview() {
       </div>
     );
 
+  const now = new Date();
+  const hour = now.getHours();
+  const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const first = (profile?.name || "").split(" ")[0];
+  const fyStartYear = Number(fy.slice(0, 4));
+  const monthIdx = (now.getFullYear() - fyStartYear) * 12 + now.getMonth() - 3; // 0 = April
+  const quarter = monthIdx >= 0 && monthIdx < 12 ? `Q${Math.floor(monthIdx / 3) + 1}` : null;
+  const goTo = (vk, n) => (n.sec ? `/v/${vk}?tab=all&sec=${n.sec}` : `/v/${vk}${n.tab ? `?tab=${n.tab}` : ""}`);
+
   return (
     <>
       <div className="card pad" style={{ display: "flex", flexWrap: "wrap", gap: 28, alignItems: "center" }}>
         <div>
-          <div style={{ fontFamily: "var(--display)", fontSize: 21, fontWeight: 700 }}>All verticals — FY {fy}</div>
-          <div style={{ fontSize: 12.5, color: "var(--faint)" }}>Every number computed live from the trackers</div>
+          <div style={{ fontFamily: "var(--display)", fontSize: 21, fontWeight: 700 }}>{hello}{first ? `, ${first}` : ""}</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)" }}>
+            {now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })} · FY {fy}{quarter ? `, ${quarter}` : ""}
+          </div>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 26 }}>
-          {[["Proposals", counts.proposals], ["Meetings", counts.meetings]].map(([l, n]) => (
-            <div key={l}>
-              <div className="bignum" style={{ fontSize: 24 }}>{n}</div>
-              <div style={{ fontSize: 11, color: "var(--faint)" }}>{l}</div>
-            </div>
-          ))}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 26, flexWrap: "wrap" }}>
+          {[["Open tasks", counts.openTasks, "/tasks"], ["Events in 30 days", counts.soon, "/calendar"],
+            ["Proposals", counts.proposals, null], ["Meetings", counts.meetings, "/meetings"]].map(([l, n, href]) => {
+            const inner = (
+              <>
+                <div className="bignum" style={{ fontSize: 24 }}>{n}</div>
+                <div style={{ fontSize: 11, color: "var(--faint)" }}>{l}</div>
+              </>
+            );
+            return href ? <Link key={l} href={href}>{inner}</Link> : <div key={l}>{inner}</div>;
+          })}
         </div>
       </div>
 
       <div className="vgrid">
         {VERTICAL_KEYS.map((vk) => {
           const v = VERTICALS[vk];
-          const top = (COUNTERS[vk] || []).slice(0, 3).map((d) => ({ ...d, value: d.calc(H) }));
-          const nonzero = top.filter((t) => t.value);
+          const goals = evalCounters((COUNTERS[vk] || []).slice(0, 3), H);
           return (
-            <Link key={vk} href={`/v/${vk}`} className="card kpi" style={{ borderTop: `3px solid ${v.color}`, textDecoration: "none", color: "inherit" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div key={vk} className="card" style={{ borderTop: `3px solid ${v.color}`, padding: "15px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+              <Link href={`/v/${vk}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ fontWeight: 700, fontSize: 14.5 }}>{v.name}</div>
                 <ArrowUpRight size={14} style={{ marginLeft: "auto", color: "var(--faint)" }} />
-              </div>
-              {nonzero.length === 0 ? (
-                <div style={{ fontSize: 12, color: "var(--faint)" }}>Trackers are warming up</div>
-              ) : (
-                <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
-                  {nonzero.map((k) => (
-                    <div key={k.label}>
-                      <div style={{ fontFamily: "var(--display)", fontSize: 20, fontWeight: 700 }}>
-                        {fmt(k.value)}<span style={{ fontSize: 11, color: "var(--faint)", marginLeft: 3 }}>{k.unit}</span>
-                      </div>
-                      <div style={{ fontSize: 10.5, color: "var(--faint)", maxWidth: 120 }}>{k.label}</div>
+              </Link>
+              <div className="goalgrid">
+                {goals.map((n) => (
+                  <Link key={n.label} href={goTo(vk, n)} className="goal link">
+                    <div className="gval">
+                      {n.unit === "₹Cr" ? `₹${fmt(n.value)}` : fmt(n.value)}
+                      {n.unit === "₹Cr" && <span style={{ fontSize: 11, color: "var(--faint)", marginLeft: 3 }}>Cr</span>}
                     </div>
-                  ))}
-                </div>
-              )}
-            </Link>
+                    <div className="glbl">{n.label}{n.extraText ? <span style={{ fontWeight: 500, color: "var(--faint)" }}> {n.extraText}</span> : null}</div>
+                    <GoalBar value={n.value} goal={n.goal} color={v.color} />
+                    {n.goal ? <div className="gof">{goalText(n)}</div> : null}
+                  </Link>
+                ))}
+              </div>
+            </div>
           );
         })}
       </div>
