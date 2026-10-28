@@ -390,3 +390,5 @@ table.data th[aria-sort="descending"]::after { content: "↓"; }
 .photostrip .ph { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 3 / 2; background: var(--inset); }
 .photostrip img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
 .photostrip .x { position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 7px; padding: 2px 5px; }
+
+.filtersel { padding: 6px 9px; border-radius: 10px; border: 1px solid var(--line); background: var(--inset); font-size: 12.5px; color: var(--ink); }

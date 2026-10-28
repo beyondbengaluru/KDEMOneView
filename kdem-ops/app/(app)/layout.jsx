@@ -175,8 +175,7 @@ function Shell({ children, profile, loading, dark, setDark, fy, setFy, menu, set
           {!perms.isCeoLevel && perms.homeVertical && (
             <div style={{ paddingLeft: 10 }}>
               {(perms.homeVertical === "bb"
-                ? [["overview", "Overview"], ["all", "All clusters"], ...CLUSTER_TABS.map((c) => [c, cShort(c)]),
-                   ["policies", "Policies"], ["database", "Database"]]
+                ? [["overview", "Overview"], ["all", "All clusters"], ["policies", "Policies"], ["database", "Database"]]
                 : [["overview", "Overview"],
                    ...VERTICALS[perms.homeVertical].tabs.map((t) => [t.viewKey || t.key, t.label])]
               ).map(([k, l]) => (

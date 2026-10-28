@@ -22,7 +22,23 @@ export const POLICY_HOME = { "IT Policy": "itgcc", "GCC Policy": "itgcc", "ESDM 
 const STAGES = ["Prospect", "Engaged", "Committed", "Grounded", "Dropped"];
 const STATUS = ["Not started", "In progress", "Done", "On hold"];
 export const LANDED = ["Grounded", "Operational", "Closed"];
-const inBB = (d) => BB_CLUSTERS.includes(d.cluster);
+// BB rows: anything in a BB cluster, plus rows the BB team tracks in Bengaluru (bb: true)
+export const inBB = (d) => BB_CLUSTERS.includes(d.cluster) || d.bb === true;
+
+// Jobs are entered per company as a number or a range ("11–50"). Totals use
+// the lower end of a range and are marked "+" when any figure isn't exact.
+export function jobsTotal(rows) {
+  let n = 0, approx = false;
+  rows.forEach((d) => {
+    const v = String(d.jobs ?? "").trim();
+    if (!v) return;
+    const m = v.replace(/,/g, "").match(/\d+/);
+    if (!m) { approx = true; return; }               // "Not disclosed"
+    n += Number(m[0]);
+    if (!/^\d+$/.test(v.replace(/,/g, ""))) approx = true;
+  });
+  return { n, approx };
+}
 
 export const CONTACT_COLS = [
   { key: "contact_name", label: "Contact person", type: "text", hide: true },
@@ -201,19 +217,6 @@ const DATABASE_TAB = { key: "database", label: "Database", isDatabase: true };
 
 // ---------- VERTICALS ----------
 
-const JOBS = {
-  key: "jobs", label: "Jobs", home: "bb",
-  sub: "Jobs created — log by company where known, or as a cluster total",
-  columns: [
-    { key: "name", label: "Company / source", type: "text" },
-    { key: "cluster", label: "Cluster", type: "select", options: CLUSTERS },
-    { key: "jobs", label: "Jobs", type: "number" },
-    { key: "period", label: "Period", type: "select", options: ["Q1", "Q2", "Q3", "Q4", "H1", "H2"] },
-    { key: "notes", label: "Notes", type: "textarea" },
-  ],
-};
-
-
 // External agencies (role 'external', vertical = desk key) see only their desk.
 export const DESKS = { pr_desk: "PR agency", digital_desk: "Digital media agency" };
 const deskTab = (key, label, kinds) => ({
@@ -384,6 +387,21 @@ const BB_CO_COLS = [
   { key: "other_address", label: "Address in another state", type: "text", hide: true },
   ...CONTACT_COLS,
 ];
+// The BB data-centre table (contact person shows under the company name)
+const BB_DC_COLS = [
+  { key: "name", label: "Company", type: "text" },
+  { key: "project_type", label: "Project type", type: "text" },
+  { key: "capacity", label: "Data center", type: "text" },
+  { key: "initial_phase", label: "Initial phase", type: "text" },
+  { key: "investment", label: "Investment", type: "text" },
+  { key: "land", label: "Land ask", type: "text" },
+  { key: "power", label: "Power ask", type: "text" },
+  { key: "cls", label: "CLS", type: "text" },
+  { key: "next_step", label: "Immediate next step", type: "textarea" },
+  { key: "cluster", label: "Cluster", type: "select", options: CLUSTERS, hide: true },
+  { key: "stage", label: "Stage", type: "select", options: ["Pipeline", "MoU", "Grounded", "Operational", "Cable landing station"], hide: true },
+  ...CONTACT_COLS,
+];
 const BB_PIPE_COLS = [
   { key: "name", label: "Company", type: "text" },
   { key: "cluster", label: "Cluster", type: "select", options: CLUSTERS },
@@ -391,8 +409,8 @@ const BB_PIPE_COLS = [
   { key: "pstage", label: "Stage (1–5)", type: "select", options: ["1", "2", "3", "4", "5"] },
   { key: "company_type", label: "Company type", type: "select", options: ["GCC", "Indian", "Startup"] },
   { key: "policy", label: "Applicable policy", type: "text" },
-  { key: "proposed_jobs", label: "Proposed jobs", type: "text" },
-  { key: "expected", label: "Expected onboarding", type: "text" },
+  { key: "proposed_jobs", label: "Proposed jobs", type: "text", hide: true },
+  { key: "expected", label: "Expected onboarding", type: "text", hide: true },
   { key: "type", label: "Type", type: "select", options: [...GCC_TYPES, ...IT_TYPES], hide: true },
   { key: "business", label: "Nature of business", type: "textarea", hide: true },
   { key: "initiated", label: "Discussions initiated", type: "text", hide: true },
@@ -413,13 +431,15 @@ export const BB_SECTIONS = [
   sec("expansions", "Expansions", COMPANIES, {
     tab: { filter: (d) => isLanded(d) && isExpansion(d), columns: BB_CO_COLS },
     defaults: { kind: "Expansion", stage: "Grounded", type: "IT/ITeS" } }),
-  sec("jobs", "Jobs", JOBS),
+  sec("dcs", "Data centres", DATACENTRES, {
+    tab: { columns: BB_DC_COLS, hasContact: false, contactUnderName: true },
+    defaults: { stage: "Pipeline" } }),
   sec("pipeline", "Pipeline", COMPANIES, {
-    tab: { filter: isPipeline, columns: BB_PIPE_COLS },
+    tab: { filter: isPipeline, columns: BB_PIPE_COLS, hasContact: false },
     defaults: { kind: "New", stage: "Engaged" } }),
-  sec("dcs", "Data centres", DATACENTRES),
   sec("awareness", "Awareness sessions", { ...AWARENESS, sources: [{ vertical: "bb", tab: "awareness" }], home: "bb" }),
-  sec("startups", "Startups", STARTUPS),
+  sec("startups", "Startups", STARTUPS, {
+    tab: { columns: STARTUPS.columns.map((c) => (c.key === "notes" ? { ...c, hide: true } : c)) } }),
   sec("policyreg", "Policy registrations", POLICYREG_BASE),
 ];
 
@@ -535,7 +555,7 @@ export const COUNTERS = {
     { label: "GCC expansions", tab: "gccs", goal: 10, calc: gccs((d) => isGcc(d) && isExpansion(d) && isLanded(d)) },
     { label: "Data centre pipeline", tab: "datacentres", goal: 7,
       calc: (H) => H.count("itgcc", "datacentres", (d) => ["Pipeline", "MoU", "Grounded"].includes(d.stage)),
-      extra: (H) => { const n = H.count("itgcc", "datacentres", (d) => d.cls === "Yes"); return n ? `+ ${n} cable landing stations` : ""; } },
+      extra: (H) => { const n = H.count("itgcc", "datacentres", (d) => String(d.cls || "").startsWith("Yes")); return n ? `+ ${n} cable landing stations` : ""; } },
     { label: "Roadshows done", tab: "roadshows", goal: 6, calc: (H) => H.count("itgcc", "roadshows", (d) => d.status === "Done") },
     { label: "GCC pipeline", metric: "GCC pipeline", calc: (H) => H.metric("itgcc", "GCC pipeline") },
     { label: "GCC partners onboarded", metric: "GCC partners onboarded", calc: (H) => H.metric("itgcc", "GCC partners onboarded") },
@@ -549,13 +569,13 @@ export const COUNTERS = {
     { label: "Companies in disbursement", metric: "Companies in disbursement", calc: (H) => H.metric("esdm", "Companies in disbursement") },
   ],
   bb: [
-    { label: "New companies", sec: "new", goal: 30,
-      calc: gccs((d) => inBB(d) && isLanded(d) && !isExpansion(d) && !isGcc(d)),
-      extra: (H) => { const n = H.count("itgcc", "gccs", (d) => inBB(d) && isLanded(d) && !isExpansion(d) && isGcc(d)); return n ? `+ ${n} GCC` : ""; } },
+    { label: "New companies", sec: "new", goal: 30, calc: gccs((d) => inBB(d) && isLanded(d) && !isExpansion(d)) },
     { label: "Expansions", sec: "expansions", calc: gccs((d) => inBB(d) && isLanded(d) && isExpansion(d)) },
-    { label: "Jobs created", sec: "jobs", goal: 750, calc: (H) => H.sum("bb", "jobs", "jobs", inBB) },
-    { label: "Pipeline", sec: "pipeline", goal: 100, calc: gccs((d) => inBB(d) && isPipeline(d)) },
+    { label: "Jobs created", sec: "new", goal: 750,
+      calc: (H) => jobsTotal(H.rows("itgcc", "gccs", (d) => inBB(d) && isLanded(d)).map((r) => r.data)).n,
+      suffix: (H) => (jobsTotal(H.rows("itgcc", "gccs", (d) => inBB(d) && isLanded(d)).map((r) => r.data)).approx ? "+" : "") },
     { label: "Data centres", sec: "dcs", calc: (H) => H.count("itgcc", "datacentres", inBB) },
+    { label: "Pipeline", sec: "pipeline", goal: 100, calc: gccs((d) => inBB(d) && isPipeline(d)) },
     { label: "Awareness sessions", sec: "awareness", goal: 60, calc: (H) => H.count("bb", "awareness", inBB) },
   ],
   talent: [
@@ -603,6 +623,7 @@ export function buildHelper(records, events) {
   const rows = (v, t, pred) => records.filter((r) => r.vertical === v && r.tab === t && (!pred || pred(r.data || {})));
   const newest = (rs, key) => rs.sort((a, b) => (b.data?.[key] || b.updated_at || "").localeCompare(a.data?.[key] || a.updated_at || ""));
   return {
+    rows,
     count: (v, t, pred) => rows(v, t, pred).length,
     sum: (v, t, f, pred) => rows(v, t, pred).reduce((a, r) => a + (Number(r.data?.[f]) || 0), 0),
     latest: (v, t, f, pred) => Number(newest(rows(v, t, pred), "as_of")[0]?.data?.[f]) || 0,

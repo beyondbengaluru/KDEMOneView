@@ -54,7 +54,7 @@ as $$
   select my_role() in ('master','ceo')
       or (my_role() in ('lead','member') and my_vertical() = v)
       or (my_role() in ('lead','member') and my_vertical() = 'bb'
-          and coalesce(d->>'cluster','') = any(bb_clusters()))
+          and (coalesce(d->>'cluster','') = any(bb_clusters()) or d->>'bb' = 'true'))
       or (my_role() = 'cluster_head' and coalesce(d->>'cluster','') = my_cluster())
       or (v = 'db' and my_role() is not null)   -- the Database is maintained by everyone
 $$;

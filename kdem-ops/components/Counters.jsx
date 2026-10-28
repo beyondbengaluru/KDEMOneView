@@ -9,7 +9,7 @@ import Modal from "./Modal";
 
 export function evalCounters(defs, H, vertical) {
   return defs.map((d) => ({
-    ...d, value: d.calc(H), extraText: d.extra ? d.extra(H) : "",
+    ...d, value: d.calc(H), extraText: d.extra ? d.extra(H) : "", suffixText: d.suffix ? d.suffix(H) : "",
     asOf: d.metric && vertical ? H.metricDate(vertical, d.metric) : "",
   }));
 }
@@ -70,7 +70,7 @@ export default function Counters({ vertical, color, onJump }) {
           {n.metric && canWrite(vertical) && <Pencil size={12} className="edit" />}
           <div className="bignum">
             {n.unit === "₹Cr" && <span style={{ fontSize: 18 }}>₹</span>}
-            {fmt(n.value)}
+            {fmt(n.value)}{n.suffixText}
             {n.unit && <span style={{ fontSize: 14, fontWeight: 600, color: "var(--faint)", marginLeft: 4 }}>{n.unit === "₹Cr" ? "Cr" : n.unit}</span>}
             {n.extraText && <span className="gextra" style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginLeft: 6 }}>{n.extraText}</span>}
           </div>

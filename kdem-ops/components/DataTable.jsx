@@ -19,6 +19,7 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [clusterF, setClusterF] = useState("");
   const [editing, setEditing] = useState(null);
   const fileRef = useRef(null);
 
@@ -58,12 +59,13 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
     let out = rows;
     if (tabDef.filter) out = out.filter((r) => tabDef.filter(r.data || {}));
     if (extraFilter) out = out.filter((r) => extraFilter(r.data || {}));
+    if (clusterF) out = out.filter((r) => (r.data?.cluster || "") === clusterF);
     if (q) {
       const s = q.toLowerCase();
       out = out.filter((r) => Object.values(r.data || {}).some((v) => String(v ?? "").toLowerCase().includes(s)));
     }
     return out;
-  }, [rows, q, tabDef, extraFilter]);
+  }, [rows, q, tabDef, extraFilter, clusterF]);
 
   const { sorted, th } = useSort(filtered, { _contact: (r) => r.data?.contact_name || r.data?.contact_email || r.data?.contact_phone });
 
@@ -123,6 +125,10 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
   }
 
   const visibleCols = tabDef.columns.filter((c) => !c.hide && !hideCols.includes(c.key));
+  // Cluster filter appears when the rows span more than one cluster
+  const clusterOptions = hideCols.includes("cluster") || !tabDef.columns.some((c) => c.key === "cluster") ? []
+    : [...new Set(rows.filter((r) => (!tabDef.filter || tabDef.filter(r.data || {})) && (!extraFilter || extraFilter(r.data || {})))
+        .map((r) => r.data?.cluster).filter(Boolean))].sort();
 
   return (
     <div className={`card anchor ${className}`} id={id}>
@@ -133,6 +139,12 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
         </div>
         {headExtra}
         <div style={{ marginLeft: "auto", display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
+          {clusterOptions.length > 1 && (
+            <select className="filtersel" value={clusterF} onChange={(e) => setClusterF(e.target.value)}>
+              <option value="">All clusters</option>
+              {clusterOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
           <div className="searchbox">
             <Search size={13} style={{ color: "var(--faint)" }} />
             <input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -179,6 +191,9 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
                     return (
                       <td key={c.key} style={first ? { fontWeight: 600 } : { color: "var(--muted)" }}>
                         {first && mirrored && <Origin v={r.vertical} />}{v || "—"}
+                        {first && tabDef.contactUnderName && r.data?.contact_name && (
+                          <div style={{ fontWeight: 400, fontSize: 11.5, color: "var(--faint)" }}>{r.data.contact_name}</div>
+                        )}
                       </td>
                     );
                   })}

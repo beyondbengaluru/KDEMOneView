@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
 import {
   VERTICALS, BB_CLUSTERS, CLUSTER_TABS, BB_SECTIONS, CUSTOM_COL_TYPES,
-  customSection, cShort,
+  customSection, cShort, inBB, jobsTotal, isLanded,
 } from "@/lib/schemas";
 import { fmt } from "@/lib/util";
 import Counters from "./Counters";
@@ -19,16 +19,17 @@ import ContactsDirectory from "./ContactsDirectory";
 import AwarenessGallery from "./AwarenessGallery";
 import Modal from "./Modal";
 
-const inBB = (d) => BB_CLUSTERS.includes(d.cluster);
 const srcOf = (t) => t.sources || [{ vertical: t.home, tab: t.key }];
 const matches = (sec, r) =>
   srcOf(sec.tabDef).some((s) => s.vertical === r.vertical && s.tab === r.tab) &&
   (!sec.tabDef.filter || sec.tabDef.filter(r.data || {}));
-// Jobs adds up; every other section counts entries
-const statOf = (sec, rows) => sec.key === "jobs"
-  ? rows.reduce((a, r) => a + (Number(r.data?.jobs) || 0), 0)
-  : rows.length;
-const GLANCE = ["new", "expansions", "jobs", "pipeline", "dcs", "awareness"];
+const statOf = (sec, rows) => rows.length;
+// Cluster boxes and headings: in this order; jobs add up from the jobs
+// entered on each new / expanded company
+const GLANCE = ["new", "expansions", "jobs", "dcs", "pipeline", "awareness"];
+const jobsIn = (mirror, pred) => jobsTotal((mirror || [])
+  .filter((r) => r.tab === "gccs" && isLanded(r.data || {}) && pred(r.data || {})).map((r) => r.data));
+const fmtJobs = (j) => `${fmt(j.n)}${j.approx ? "+" : ""}`;
 
 export default function BBView() {
   const v = VERTICALS.bb;
@@ -80,13 +81,16 @@ export default function BBView() {
     const out = {};
     CLUSTER_TABS.forEach((c) => {
       out[c] = {
-        stats: GLANCE.map((k) => [byKey[k].label, statFor(byKey[k], (d) => d.cluster === c), k]),
+        stats: GLANCE.map((k) => {
+          if (k === "jobs") { const j = jobsIn(mirror, (d) => d.cluster === c); return ["Jobs", j.n, "new", fmtJobs(j)]; }
+          return [byKey[k].label, statFor(byKey[k], (d) => d.cluster === c), k];
+        }),
         companies: ["new", "expansions", "pipeline"].reduce((a, k) => a + statFor(byKey[k], (d) => d.cluster === c), 0),
         openTasks: tasks.filter((t) => t.cluster === c && t.status !== "done").length,
       };
     });
     return out;
-  }, [sections, statFor, tasks]);
+  }, [sections, statFor, tasks, mirror]);
 
   const canManage = canWrite("bb");
   const sectionProps = {
@@ -124,9 +128,9 @@ export default function BBView() {
                   <div style={{ fontWeight: 700, fontSize: 14.5 }}>{c}</div>
                   {/* Same six numbers, same 3 × 2 layout, for every cluster */}
                   <div className="glance">
-                    {g.stats.map(([l, n, k]) => (
-                      <button key={k} className={n ? "" : "zero"} onClick={(e) => { e.stopPropagation(); jumpTo(c, k); }}>
-                        <div className="gn">{fmt(n)}</div>
+                    {g.stats.filter(([, n]) => n).map(([l, n, k, shown]) => (
+                      <button key={l} onClick={(e) => { e.stopPropagation(); jumpTo(c, k); }}>
+                        <div className="gn">{shown || fmt(n)}</div>
                         <div className="gl">{l}</div>
                       </button>
                     ))}
@@ -136,7 +140,7 @@ export default function BBView() {
               );
             })}
           </div>
-          <TasksPanel vertical="bb" coreOnly title="Core team tasks" />
+          <TasksPanel vertical="bb" title="Tasks" />
         </>
       )}
 
@@ -175,7 +179,7 @@ export default function BBView() {
 }
 
 /** Title row: cluster name, a few headline numbers, and the "Add section" menu. */
-function SectionHead({ title, scope, pred, facts, sections, statFor, revealed, reveal, canManage, onNewSection }) {
+function SectionHead({ title, scope, pred, facts, sections, statFor, revealed, reveal, canManage, onNewSection, mirror }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -186,7 +190,10 @@ function SectionHead({ title, scope, pred, facts, sections, statFor, revealed, r
   const shown = (s) => statFor(s, pred) > 0 || (revealed[scope] || []).includes(s.key);
   const hidden = sections.filter((s) => !shown(s));
   const headline = facts
-    ? sections.filter((s) => GLANCE.includes(s.key)).map((s) => [s.label, statFor(s, pred)]).filter(([, n]) => n)
+    ? GLANCE.map((k) => {
+        if (k === "jobs") { const j = jobsIn(mirror, pred); return ["Jobs", j.n, fmtJobs(j)]; }
+        const s = sections.find((x) => x.key === k); return [s.label, statFor(s, pred)];
+      }).filter(([, n]) => n)
     : [];
 
   return (
@@ -194,7 +201,7 @@ function SectionHead({ title, scope, pred, facts, sections, statFor, revealed, r
       <h2>{title}</h2>
       {headline.length > 0 && (
         <div className="facts">
-          {headline.map(([l, n]) => <span key={l}><b>{fmt(n)}</b> {l.toLowerCase()}</span>)}
+          {headline.map(([l, n, shown]) => <span key={l}><b>{shown || fmt(n)}</b> {l.toLowerCase()}</span>)}
         </div>
       )}
       {canManage && (

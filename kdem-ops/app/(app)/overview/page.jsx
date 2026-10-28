@@ -108,7 +108,7 @@ export default function Overview() {
                 {goals.map((n) => (
                   <Link key={n.label} href={goTo(vk, n)} className="goal link">
                     <div className="gval" title={n.extraText || undefined}>
-                      {n.unit === "₹Cr" ? `₹${fmt(n.value)}` : fmt(n.value)}
+                      {n.unit === "₹Cr" ? `₹${fmt(n.value)}` : fmt(n.value)}{n.suffixText}
                       {n.unit === "₹Cr" && <span style={{ fontSize: 11, color: "var(--faint)", marginLeft: 3 }}>Cr</span>}
                       {n.extraText && <sup style={{ fontSize: 10, color: "var(--faint)", marginLeft: 3 }}>+{n.extraText.match(/\d+/)?.[0]}</sup>}
                     </div>
