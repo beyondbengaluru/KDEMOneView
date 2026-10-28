@@ -16,6 +16,7 @@ import EventsTable from "./EventsTable";
 import TasksPanel from "./TasksPanel";
 import ProposalsBoard from "./ProposalsBoard";
 import ContactsDirectory from "./ContactsDirectory";
+import AwarenessGallery from "./AwarenessGallery";
 import Modal from "./Modal";
 
 const inBB = (d) => BB_CLUSTERS.includes(d.cluster);
@@ -118,23 +119,18 @@ export default function BBView() {
           <div className="vgrid">
             {CLUSTER_TABS.map((c) => {
               const g = glance[c];
-              const stats = g.stats.filter(([, n]) => n);
               return (
                 <div key={c} className="card kpi" style={{ borderTop: `3px solid ${v.color}` }} onClick={() => setTab(c)}>
                   <div style={{ fontWeight: 700, fontSize: 14.5 }}>{c}</div>
-                  {stats.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "var(--faint)" }}>Nothing tracked yet</div>
-                  ) : (
-                    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                      {stats.map(([l, n, k]) => (
-                        <button key={k} style={{ background: "none", border: "none", textAlign: "left", padding: 0 }}
-                          onClick={(e) => { e.stopPropagation(); jumpTo(c, k); }}>
-                          <div style={{ fontFamily: "var(--display)", fontSize: 20, fontWeight: 700 }}>{fmt(n)}</div>
-                          <div style={{ fontSize: 10.5, color: "var(--faint)" }}>{l}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {/* Same six numbers, same 3 × 2 layout, for every cluster */}
+                  <div className="glance">
+                    {g.stats.map(([l, n, k]) => (
+                      <button key={k} className={n ? "" : "zero"} onClick={(e) => { e.stopPropagation(); jumpTo(c, k); }}>
+                        <div className="gn">{fmt(n)}</div>
+                        <div className="gl">{l}</div>
+                      </button>
+                    ))}
+                  </div>
                   {g.openTasks > 0 && <div style={{ fontSize: 11.5, color: "var(--faint)" }}>{g.openTasks} open tasks</div>}
                 </div>
               );
@@ -233,9 +229,20 @@ function Sections({ scope, cluster, sections, mirror, revealed, focus, clearFocu
     if (!focus || !mirror) return;
     const target = sections.find((s) => s.key === focus);
     if (target && statFor(target, pred) === 0) reveal(scope, focus);
-    const t1 = setTimeout(() => document.getElementById(`bbsec-${focus}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 350);
-    const t2 = setTimeout(clearFocus, 2000);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    // Tables above the target keep loading and push it down, so keep it in view
+    // until the page settles — unless the person starts scrolling themselves.
+    let stop = false;
+    const cancel = () => { stop = true; };
+    const go = (smooth) => !stop && document.getElementById(`bbsec-${focus}`)?.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
+    const timers = [150, 600, 1100, 1700, 2400].map((ms, i) => setTimeout(() => go(i === 0), ms));
+    timers.push(setTimeout(clearFocus, 2600));
+    window.addEventListener("wheel", cancel, { passive: true });
+    window.addEventListener("touchmove", cancel, { passive: true });
+    window.addEventListener("keydown", cancel);
+    return () => {
+      timers.forEach(clearTimeout);
+      window.removeEventListener("wheel", cancel); window.removeEventListener("touchmove", cancel); window.removeEventListener("keydown", cancel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus, mirror === null]);
 
@@ -244,7 +251,11 @@ function Sections({ scope, cluster, sections, mirror, revealed, focus, clearFocu
   if (!visible.length)
     return <div className="card empty">Nothing tracked here yet. Use “Add section” to start one.</div>;
 
-  return visible.map((s) => (
+  return visible.map((s) => s.key === "awareness" ? (
+    <AwarenessGallery key={`${scope}-aw`} id="bbsec-awareness" className={focus === s.key ? "flash" : ""}
+      rows={mirror.filter((r) => r.vertical === "bb" && r.tab === "awareness" && pred(r.data || {}))}
+      cluster={cluster} color={color} />
+  ) : (
     <DataTable key={`${scope}-${s.key}`} id={`bbsec-${s.key}`} className={focus === s.key ? "flash" : ""}
       pageVertical="bb" tabDef={s.tabDef} accentColor={color} title={s.label}
       defaults={{ ...(s.defaults || {}), ...(cluster ? { cluster } : {}) }}

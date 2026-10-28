@@ -55,7 +55,7 @@ multi-vertical and can be kept off the calendar.
   clicking the tile (each update is dated and kept).
 - Home cards use short labels so the progress bars line up; System section is
   Master-only; Shivamogga merged into **Davanagere**.
-- Existing databases: run `supabase/migrate_v7.sql` (after v5 and v6).
+- Existing databases: run `supabase/migrate_v7.sql` (after v5 and v6), then `migrate_v8.sql`.
 
 ### Outlook sync — one-time setup (IT / Azure admin)
 1. Azure portal → Microsoft Entra ID → App registrations → New registration.
