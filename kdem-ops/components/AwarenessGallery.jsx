@@ -36,6 +36,8 @@ export default function AwarenessGallery({ rows, cluster, color, id, className =
   const [target, setTarget] = useState(cluster || (profile?.role === "cluster_head" ? profile.cluster : CLUSTER_TABS[0]));
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(null);
+  const [view, setView] = useState("");   // cluster filter on "All clusters"
+  const clusters = useMemo(() => [...new Set(rows.map((r) => r.data?.cluster).filter(Boolean))].sort(), [rows]);
   const fileRef = useRef(null);
   const ordered = useMemo(() => [...rows].sort((a, b) =>
     String(a.data?.cluster).localeCompare(String(b.data?.cluster)) ||
@@ -69,7 +71,7 @@ export default function AwarenessGallery({ rows, cluster, color, id, className =
       <div className="card-head">
         <div>
           <div className="t">Awareness sessions · {rows.length}</div>
-          <div className="s">Each photo you add is a new session. Open one to add its date, venue or more photos.</div>
+          <div className="s">Add a session with its photo. Open one to add the date, venue or more photos.</div>
         </div>
         {canAdd && (
           <div style={{ marginLeft: "auto", display: "flex", gap: 7, alignItems: "center" }}>
@@ -81,15 +83,24 @@ export default function AwarenessGallery({ rows, cluster, color, id, className =
             )}
             <button className="btn sm primary" style={{ background: color, borderColor: color }} disabled={busy}
               onClick={() => fileRef.current?.click()}>
-              <ImagePlus size={13} /> {busy ? "Uploading…" : "Add photos"}
+              <ImagePlus size={13} /> {busy ? "Uploading…" : "Add session"}
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={addPhotos} />
           </div>
         )}
       </div>
-      {rows.length === 0 ? <div className="empty">No sessions yet — add a photo to log one.</div> : (
+      {!cluster && clusters.length > 1 && (
+        <div className="subtabs">
+          {["", ...clusters].map((c) => (
+            <button key={c || "all"} className={`stab ${view === c ? "on" : ""}`} onClick={() => setView(c)}>
+              {c ? `${cShort(c)} · ${rows.filter((r) => r.data?.cluster === c).length}` : `All · ${rows.length}`}
+            </button>
+          ))}
+        </div>
+      )}
+      {rows.length === 0 ? <div className="empty">No sessions yet — add one with its photo.</div> : (
         <div className="gallery">
-          {ordered.map((r) => {
+          {ordered.filter((r) => !view || r.data?.cluster === view).map((r) => {
             const ph = r.data?.photos || [];
             const d = r.data || {};
             return (

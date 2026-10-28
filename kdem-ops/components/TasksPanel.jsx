@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { Plus, Trash2, Presentation, CalendarCheck, Lock, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { SCOPES, VERTICAL_KEYS, BB_CLUSTERS, TASK_VISIBILITIES, vColor, vName } from "@/lib/schemas";
+import { SCOPES, VERTICAL_KEYS, BB_CLUSTERS, TASK_VISIBILITIES, vColor, vName, cShort } from "@/lib/schemas";
 import { todayISO } from "@/lib/util";
 import Modal from "./Modal";
 import Pill from "./Pill";
@@ -56,6 +56,8 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
   const RANK = { high: 0, medium: 1, low: 2, todo: 0, inprogress: 1, done: 2 };
   const { sorted, th } = useSort(filtered, {
     task: (t) => t.title, priority: (t) => RANK[t.priority], status: (t) => RANK[t.status],
+    cross: (t) => [...new Set([t.vertical, ...(t.verticals || [])])].filter((v) => v !== "bb").map(vName).join(", "),
+    cluster: (t) => t.cluster || "Core",
     due: (t) => (t.due_date ? `${t.due_date} ${t.due_time || ""}` : ""),
   });
 
@@ -96,6 +98,10 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
   };
   const overdue = (t) => t.due_date && t.status !== "done" && t.due_date < todayISO();
   const showVerticalCol = !vertical && !coreOnly;
+  // Beyond Bengaluru tables: cluster instead of assignee, the other verticals
+  // a task is shared with instead of "Beyond Bengaluru", and notes last
+  const bbMode = vertical === "bb" || coreOnly;
+  const crossOf = (t) => [...new Set([t.vertical, ...(t.verticals || [])])].filter((v) => v !== "bb");
   const showClusterCol = vertical === "bb" || coreOnly || !!cluster;
 
   return (
@@ -127,8 +133,10 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
                 <th {...th("task")}>Task</th>
                 {showVerticalCol && <th {...th("vertical")}>Vertical</th>}
                 {showClusterCol && !cluster && <th {...th("cluster")}>Cluster</th>}
-                <th {...th("assignee")}>Assignee</th><th {...th("priority")}>Priority</th>
+                {bbMode ? <th {...th("cross")}>Cross-vertical</th> : <th {...th("assignee")}>Assignee</th>}
+                <th {...th("priority")}>Priority</th>
                 <th {...th("status")}>Status</th><th {...th("due")}>Due</th>
+                {bbMode && <th {...th("notes")}>Notes</th>}
               </tr>
             </thead>
             <tbody>
@@ -140,7 +148,7 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
                     {t.visibility === "private" && <Lock size={11} style={{ color: "var(--faint)", marginRight: 6, verticalAlign: -1 }} title="Only you can see this" />}
                     {t.visibility === "team" && <Users size={11} style={{ color: "var(--faint)", marginRight: 6, verticalAlign: -1 }} title="Whole team" />}
                     {t.title}
-                    {(t.verticals || []).length > 0 && (
+                    {!bbMode && (t.verticals || []).length > 0 && (
                       <span style={{ marginLeft: 7 }}>
                         {t.verticals.map((v) => (
                           <span key={v} title={`Also in ${vName(v)}`} className="origin" style={{ background: vColor(v) }} />
@@ -151,8 +159,12 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
                   {showVerticalCol && (
                     <td><span className="pill" style={{ color: vColor(t.vertical), background: `${vColor(t.vertical)}1c` }}>{vName(t.vertical)}</span></td>
                   )}
-                  {showClusterCol && !cluster && <td style={{ color: "var(--muted)", fontSize: 12.5 }}>{t.cluster || "Core"}</td>}
-                  <td style={{ color: "var(--muted)" }}>{t.assignee || "—"}</td>
+                  {showClusterCol && !cluster && <td style={{ color: "var(--muted)", fontSize: 12.5, whiteSpace: "nowrap" }}>{t.cluster ? cShort(t.cluster) : "Core"}</td>}
+                  {bbMode ? (
+                    <td>{crossOf(t).length ? crossOf(t).map((v) => (
+                      <span key={v} className="pill" style={{ color: vColor(v), background: `${vColor(v)}1c`, marginRight: 4 }}>{vName(v)}</span>
+                    )) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
+                  ) : <td style={{ color: "var(--muted)" }}>{t.assignee || "—"}</td>}
                   <td><Pill value={t.priority} /></td>
                   <td onClick={(e) => { e.stopPropagation(); cycleStatus(t); }}>
                     <Pill value={t.status === "done" ? "Done" : t.status === "inprogress" ? "In progress" : "todo"} />
@@ -160,6 +172,7 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
                   <td style={{ color: overdue(t) ? "var(--bad)" : "var(--muted)", fontFamily: "var(--mono)", fontSize: 12, whiteSpace: "nowrap" }}>
                     {t.due_date || "—"}{t.due_time ? ` ${t.due_time}` : ""}
                   </td>
+                  {bbMode && <td style={{ color: "var(--muted)", fontSize: 12.5, maxWidth: 260 }}>{t.notes || "—"}</td>}
                 </tr>
               ))}
             </tbody>
