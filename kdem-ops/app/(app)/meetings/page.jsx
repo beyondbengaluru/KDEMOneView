@@ -278,7 +278,7 @@ function MeetingModal({ meeting, team, onSave, onDelete, onClose, notify }) {
             <option value="">—</option>
             {SCOPES.map((k) => <option key={k} value={k}>{vName(k)}</option>)}
           </select></div>
-        <div className="field"><label>Assignee</label>
+        <div className="field"><label>Owner</label>
           <input list="kdem-team-m" value={step.assignee} onChange={(e) => setStep({ ...step, assignee: e.target.value })} />
           <datalist id="kdem-team-m">{team.map((p) => <option key={p.id} value={p.name} />)}</datalist></div>
         <div className="field"><label>Due</label>
