@@ -49,7 +49,7 @@ const COMPANY_COLS = [
   { key: "kind", label: "New / Expansion", type: "select", options: ["New", "Expansion"] },
   { key: "cluster", label: "Cluster", type: "select", options: CLUSTERS },
   { key: "stage", label: "Stage", type: "select", options: STAGES },
-  { key: "jobs", label: "Jobs / HC", type: "number" },
+  { key: "jobs", label: "Jobs", type: "text" },   // a number or a range, e.g. 11–50
   ...CONTACT_COLS,
   { key: "notes", label: "Notes", type: "textarea" },
 ];
@@ -366,19 +366,56 @@ export const VERTICALS = {
 };
 
 // ---------- BEYOND BENGALURU SECTIONS ----------
+// Columns follow the BB H1 progress sheet (no investment, onboarding
+// duration, remarks or notes). Long fields open in the entry form only.
+const YN = ["Yes", "No"];
+const BB_CO_COLS = [
+  { key: "name", label: "Company", type: "text" },
+  { key: "cluster", label: "Cluster", type: "select", options: CLUSTERS },
+  { key: "sector", label: "Sector", type: "text" },
+  { key: "jobs", label: "Jobs", type: "text" },
+  { key: "kits", label: "KITS registered", type: "select", options: YN },
+  { key: "incentive", label: "Incentives applied", type: "select", options: YN },
+  { key: "quarter", label: "Quarter", type: "select", options: ["Q1", "Q2", "Q1/Q2", "Q3", "Q4"] },
+  { key: "type", label: "Type", type: "select", options: [...GCC_TYPES, ...IT_TYPES], hide: true },
+  { key: "business", label: "Nature of business", type: "textarea", hide: true },
+  { key: "incentives", label: "Incentives applied for", type: "text", hide: true },
+  { key: "parent_address", label: "Address of parent company", type: "textarea", hide: true },
+  { key: "other_address", label: "Address in another state", type: "text", hide: true },
+  ...CONTACT_COLS,
+];
+const BB_PIPE_COLS = [
+  { key: "name", label: "Company", type: "text" },
+  { key: "cluster", label: "Cluster", type: "select", options: CLUSTERS },
+  { key: "sector", label: "Sector", type: "text" },
+  { key: "pstage", label: "Stage (1–5)", type: "select", options: ["1", "2", "3", "4", "5"] },
+  { key: "company_type", label: "Company type", type: "select", options: ["GCC", "Indian", "Startup"] },
+  { key: "policy", label: "Applicable policy", type: "text" },
+  { key: "proposed_jobs", label: "Proposed jobs", type: "text" },
+  { key: "expected", label: "Expected onboarding", type: "text" },
+  { key: "type", label: "Type", type: "select", options: [...GCC_TYPES, ...IT_TYPES], hide: true },
+  { key: "business", label: "Nature of business", type: "textarea", hide: true },
+  { key: "initiated", label: "Discussions initiated", type: "text", hide: true },
+  { key: "mca", label: "Registered with MCA", type: "select", options: YN, hide: true },
+  { key: "announced", label: "Establishment announced", type: "select", options: YN, hide: true },
+  { key: "incentive_info", label: "Told about applicable incentives", type: "select", options: YN, hide: true },
+  { key: "ka_address", label: "Address in Karnataka", type: "textarea", hide: true },
+  { key: "parent_address", label: "Address of parent company", type: "textarea", hide: true },
+  ...CONTACT_COLS,
+];
 // Each section is a view over a shared dataset. A pipeline company moved to
 // "Grounded" moves itself from Pipeline to New companies / Expansions.
 const sec = (key, label, tabDef, extra = {}) => ({ key, label, tabDef: { ...tabDef, viewKey: `bb-${key}`, label, sub: undefined, ...extra.tab }, ...extra });
 export const BB_SECTIONS = [
   sec("new", "New companies", COMPANIES, {
-    tab: { filter: (d) => isLanded(d) && !isExpansion(d) },
+    tab: { filter: (d) => isLanded(d) && !isExpansion(d), columns: BB_CO_COLS },
     defaults: { kind: "New", stage: "Grounded", type: "IT/ITeS" } }),
   sec("expansions", "Expansions", COMPANIES, {
-    tab: { filter: (d) => isLanded(d) && isExpansion(d) },
+    tab: { filter: (d) => isLanded(d) && isExpansion(d), columns: BB_CO_COLS },
     defaults: { kind: "Expansion", stage: "Grounded", type: "IT/ITeS" } }),
   sec("jobs", "Jobs", JOBS),
   sec("pipeline", "Pipeline", COMPANIES, {
-    tab: { filter: isPipeline },
+    tab: { filter: isPipeline, columns: BB_PIPE_COLS },
     defaults: { kind: "New", stage: "Engaged" } }),
   sec("dcs", "Data centres", DATACENTRES),
   sec("awareness", "Awareness sessions", { ...AWARENESS, sources: [{ vertical: "bb", tab: "awareness" }], home: "bb" }),

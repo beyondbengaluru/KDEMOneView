@@ -367,3 +367,26 @@ table.data th.sortable { cursor: pointer; user-select: none; }
 table.data th.sortable:hover { color: var(--muted); }
 table.data th[aria-sort]::after { content: "↑"; margin-left: 4px; color: var(--brand); }
 table.data th[aria-sort="descending"]::after { content: "↓"; }
+
+/* BB cluster summary: six numbers, 3 × 2, identical for every cluster */
+.glance { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 12px; }
+.glance button { background: none; border: none; text-align: left; padding: 4px 6px; margin: -4px -6px; border-radius: 8px; }
+.glance button:hover { background: var(--inset); }
+.glance .gn { font-family: var(--display); font-size: 20px; font-weight: 700; line-height: 1.15; color: var(--ink); }
+.glance .gl { font-size: 10.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.glance .zero .gn { color: var(--faint); font-weight: 600; }
+
+/* awareness photo gallery */
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; padding: 14px; }
+.gtile { position: relative; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--inset);
+  cursor: pointer; text-align: left; padding: 0; aspect-ratio: 3 / 2; }
+.gtile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gtile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; font-size: 11px; font-weight: 600; color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,.65)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gtile .more { position: absolute; top: 6px; right: 6px; font-size: 10.5px; font-weight: 700; color: #fff; background: rgba(0,0,0,.55);
+  padding: 1px 7px; border-radius: 99px; }
+.gtile .nophoto { display: grid; place-items: center; height: 100%; color: var(--faint); font-size: 11.5px; }
+.photostrip { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.photostrip .ph { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 3 / 2; background: var(--inset); }
+.photostrip img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+.photostrip .x { position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 7px; padding: 2px 5px; }
