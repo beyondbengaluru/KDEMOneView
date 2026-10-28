@@ -109,7 +109,6 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
       <div className="card-head">
         <div>
           <div className="t">{title}</div>
-          <div className="s">Click a status pill to advance it</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 7, alignItems: "center" }}>
           {["open", "done", "all"].map((f) => (
@@ -133,7 +132,7 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
                 <th {...th("task")}>Task</th>
                 {showVerticalCol && <th {...th("vertical")}>Vertical</th>}
                 {showClusterCol && !cluster && <th {...th("cluster")}>Cluster</th>}
-                {bbMode ? <th {...th("cross")}>Cross-vertical</th> : <th {...th("assignee")}>Assignee</th>}
+                {bbMode ? <th {...th("cross")}>Cross-vertical</th> : <th {...th("assignee")}>Owner</th>}
                 <th {...th("priority")}>Priority</th>
                 <th {...th("status")}>Status</th><th {...th("due")}>Due</th>
                 {bbMode && <th {...th("notes")}>Notes</th>}
@@ -232,7 +231,7 @@ function TaskModal({ task, editableFn, team, lockVertical, lockCluster, onSave, 
               {BB_CLUSTERS.map((c) => <option key={c} value={c}>{c}</option>)}
             </select></div>
         )}
-        <div className="field"><label>Assignee</label>
+        <div className="field"><label>Owner</label>
           <input list="kdem-team" value={f.assignee ?? ""} onChange={(e) => set("assignee", e.target.value)} disabled={!editable} />
           <datalist id="kdem-team">{team.map((n) => <option key={n} value={n} />)}</datalist></div>
         <div className="field"><label>Priority</label>

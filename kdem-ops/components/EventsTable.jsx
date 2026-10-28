@@ -260,7 +260,7 @@ function EventModal({ event, editable, onSave, onDelete, onClose, notify }) {
           <input placeholder="Task for this event" value={step.title}
             onChange={(e) => setStep({ ...step, title: e.target.value })}
             style={{ padding: "8px 10px", border: "1px solid var(--line2)", borderRadius: 9, background: "var(--inset)" }} />
-          <input list="kdem-team-e" placeholder="Assignee" value={step.assignee}
+          <input list="kdem-team-e" placeholder="Owner" value={step.assignee}
             onChange={(e) => setStep({ ...step, assignee: e.target.value })}
             style={{ padding: "8px 10px", border: "1px solid var(--line2)", borderRadius: 9, background: "var(--inset)" }} />
           <datalist id="kdem-team-e">{team.map((n) => <option key={n} value={n} />)}</datalist>
