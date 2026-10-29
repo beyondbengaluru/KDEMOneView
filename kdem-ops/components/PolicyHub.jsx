@@ -3,7 +3,7 @@ import { useState } from "react";
 import DataTable from "./DataTable";
 
 // Policies = Registrations | Incentives Awareness Drive | Strategy
-export default function PolicyHub({ vertical, hub, accentColor, clusterFilter, extraFilter }) {
+export default function PolicyHub({ vertical, hub, accentColor, clusterFilter, extraFilter, registrationsExtra }) {
   const [sub, setSub] = useState("registrations");
   const subs = [
     ["registrations", hub.registrations.label],
@@ -23,6 +23,7 @@ export default function PolicyHub({ vertical, hub, accentColor, clusterFilter, e
         defaults={clusterFilter ? { cluster: clusterFilter } : {}}
         hideCols={clusterFilter ? ["cluster"] : []}
         extraFilter={cf} />
+      {sub === "registrations" && registrationsExtra}
     </div>
   );
 }

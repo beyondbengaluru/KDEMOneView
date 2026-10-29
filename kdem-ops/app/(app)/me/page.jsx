@@ -195,7 +195,7 @@ export default function MePage() {
         <div className="card-head">
           <div>
             <div className="t">My documents</div>
-            <div className="s">Private storage — IDs, letters, notes, anything you need at hand</div>
+            <div className="s">Only you can see these — IDs, letters, notes, anything you need at hand</div>
           </div>
           <button className="btn sm" style={{ marginLeft: "auto" }} disabled={uploading} onClick={() => fileRef.current?.click()}>
             <Upload size={13} /> {uploading ? "Uploading…" : "Upload"}

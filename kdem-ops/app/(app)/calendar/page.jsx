@@ -16,7 +16,7 @@ function shiftWeek(iso, days) {
 export default function CalendarPage() {
   const { fy, profile, notify } = useApp();
   // Two calendars: meetings (+ events, synced with Outlook) and tasks
-  const [mode, setModeState] = useState("meetings");
+  const [mode, setModeState] = useState("tasks");
   useEffect(() => { const s = localStorage.getItem("kdem-cal"); if (s) setModeState(s); }, []);
   const setMode = (m) => { setModeState(m); localStorage.setItem("kdem-cal", m); setSelected(null); };
   const [ms, setMs] = useState(null);        // signed-in Microsoft account

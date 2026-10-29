@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { Plus, Trash2, Presentation, CalendarCheck, Lock, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { SCOPES, VERTICAL_KEYS, BB_CLUSTERS, TASK_VISIBILITIES, vColor, vName, cShort } from "@/lib/schemas";
+import { SCOPES, VERTICAL_KEYS, BB_CLUSTERS, CLUSTER_TABS, TASK_VISIBILITIES, vColor, vName, cShort } from "@/lib/schemas";
 import { todayISO } from "@/lib/util";
 import Modal from "./Modal";
 import Pill from "./Pill";
@@ -27,13 +27,16 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
       setTeam((data || []).map((p) => p.name).filter(Boolean)));
   }, []);
   const [filter, setFilter] = useState("open");
+  // BB task tables: a cluster head starts on their own cluster
+  const [clusterView, setClusterView] = useState(profile?.role === "cluster_head" ? profile.cluster || "" : "");
   const [editing, setEditing] = useState(null);
 
   const load = useCallback(async () => {
     let qy = supabase.from("tasks").select("*").order("due_date", { ascending: true, nullsFirst: false });
     if (cluster) qy = qy.eq("cluster", cluster);
     if (coreOnly) qy = qy.eq("vertical", "bb").is("cluster", null);
-    else if (vertical && !cluster) qy = qy.or(`vertical.eq.${vertical},verticals.cs.{${vertical}}`);
+    else if (vertical && !cluster) qy = qy.or(`vertical.eq.${vertical},verticals.cs.{${vertical}}` +
+      (vertical === "bb" && profile?.role === "cluster_head" && profile.cluster ? `,cluster.eq.${profile.cluster}` : ""));
     const { data } = await qy;
     setRows(data || []);
   }, [vertical, cluster, coreOnly]);
@@ -47,10 +50,13 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
   }, [vertical, cluster, coreOnly, load]);
 
   const filtered = useMemo(() => {
-    if (filter === "open") return rows.filter((t) => t.status !== "done");
-    if (filter === "done") return rows.filter((t) => t.status === "done");
-    return rows;
-  }, [rows, filter]);
+    let out = rows;
+    // One cluster = its own tasks + BB tasks for all clusters + tasks from other verticals
+    if (clusterView && !cluster) out = out.filter((t) => t.cluster === clusterView || !t.cluster || t.vertical !== "bb");
+    if (filter === "open") return out.filter((t) => t.status !== "done");
+    if (filter === "done") return out.filter((t) => t.status === "done");
+    return out;
+  }, [rows, filter, clusterView, cluster]);
 
   // Mirrors the SQL policy: creator, assignee, or the owning vertical's team
   const RANK = { high: 0, medium: 1, low: 2, todo: 0, inprogress: 1, done: 2 };
@@ -63,6 +69,7 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
 
   const canEditTask = (t) =>
     t.created_by === profile.id || (t.assignee && t.assignee === profile.name) ||
+    (profile.role === "cluster_head" && t.cluster && t.cluster === profile.cluster) ||
     (canWrite(t.vertical) && (profile.role !== "cluster_head" || (t.cluster || "") === profile.cluster));
 
   async function save(f, id, stayOpen = false) {
@@ -111,6 +118,12 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
           <div className="t">{title}</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 7, alignItems: "center" }}>
+          {(vertical === "bb" || coreOnly) && !cluster && (
+            <select className="filtersel" value={clusterView} onChange={(e) => setClusterView(e.target.value)}>
+              <option value="">All clusters</option>
+              {CLUSTER_TABS.map((c) => <option key={c} value={c}>{cShort(c)}</option>)}
+            </select>
+          )}
           {["open", "done", "all"].map((f) => (
             <button key={f} className={`btn sm ${filter === f ? "primary" : "ghost"}`} onClick={() => setFilter(f)}>
               {f[0].toUpperCase() + f.slice(1)}

@@ -17,6 +17,7 @@ import TasksPanel from "./TasksPanel";
 import ProposalsBoard from "./ProposalsBoard";
 import ContactsDirectory from "./ContactsDirectory";
 import AwarenessGallery from "./AwarenessGallery";
+import { useSort } from "@/lib/sort";
 import Modal from "./Modal";
 
 const srcOf = (t) => t.sources || [{ vertical: t.home, tab: t.key }];
@@ -164,7 +165,9 @@ export default function BBView() {
 
       {tab === "policies" && (
         <PolicyHub vertical="bb" hub={v.tabs[0]} accentColor={v.color}
-          extraFilter={(d) => !d.cluster || BB_CLUSTERS.includes(d.cluster)} />
+          extraFilter={(d) => !d.cluster || BB_CLUSTERS.includes(d.cluster)}
+          registrationsExtra={<KitsRegistered mirror={mirror} onOpen={(r) =>
+            jumpTo(CLUSTER_TABS.includes(r.data.cluster) ? r.data.cluster : "all", r.data.kind === "Expansion" ? "expansions" : "new")} />} />
       )}
 
       {tab === "database" && <ContactsDirectory vertical="bb" accentColor={v.color} />}
@@ -373,5 +376,47 @@ function CustomSectionModal({ row, cluster, onClose, onSaved }) {
         Include contact person fields (name, designation, phone, email, LinkedIn)
       </label>
     </Modal>
+  );
+}
+
+/**
+ * Companies marked "KITS registered: Yes" in New companies / Expansions,
+ * listed under Policies → Registrations. Linked, not copied: the company
+ * row stays the one record; clicking opens it in its cluster.
+ */
+function KitsRegistered({ mirror, onOpen }) {
+  const rows = (mirror || []).filter((r) => r.tab === "gccs" && isLanded(r.data || {}) && inBB(r.data || {}) && r.data?.kits === "Yes");
+  const { sorted, th } = useSort(rows, { kind: (r) => r.data?.kind });
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div className="card-head">
+        <div>
+          <div className="t">Registered with KITS · from company trackers · {rows.length}</div>
+          <div className="s">New companies and expansions marked “KITS registered: Yes”. Update them in their cluster section.</div>
+        </div>
+      </div>
+      {rows.length === 0 ? <div className="empty">No companies marked as KITS registered yet.</div> : (
+        <div className="tablewrap">
+          <table className="data">
+            <thead><tr>
+              <th {...th("name")}>Company</th><th {...th("cluster")}>Cluster</th><th {...th("kind")}>New / Expansion</th>
+              <th {...th("sector")}>Sector</th><th {...th("incentive")}>Incentives applied</th><th {...th("incentives")}>Incentives</th>
+            </tr></thead>
+            <tbody>
+              {sorted.map((r) => (
+                <tr key={r.id} onClick={() => onOpen(r)} title="Open in its cluster">
+                  <td style={{ fontWeight: 600 }}>{r.data.name}</td>
+                  <td style={{ color: "var(--muted)" }}>{cShort(r.data.cluster)}</td>
+                  <td><span className="pill" style={{ color: "var(--muted)", background: "var(--inset)" }}>{r.data.kind || "New"}</span></td>
+                  <td style={{ color: "var(--muted)" }}>{r.data.sector || "—"}</td>
+                  <td style={{ color: "var(--muted)" }}>{r.data.incentive || "—"}</td>
+                  <td style={{ color: "var(--muted)" }}>{r.data.incentives || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
