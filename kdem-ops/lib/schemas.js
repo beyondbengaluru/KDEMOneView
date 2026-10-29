@@ -479,7 +479,7 @@ export const EVENT_TYPES = ["Pre-BTS Cluster", "Summit", "International", "Domes
 export const ROLE_LABELS = { master: "Master", ceo: "CEO Office", lead: "Lead", member: "Member", cluster_head: "Cluster Head", external: "External agency" };
 export const DESIGNATIONS = {
   ceo_office: ["CEO", "CAO", "HR", "Associate", "Fellow", "HR Admin"],
-  vertical: ["VP", "Associate", "Fellow", "Intern"],
+  vertical: ["VP", "Cluster Head", "Associate", "Fellow", "Intern"],
 };
 export const designationsFor = (role) =>
   role === "ceo" || role === "master" ? DESIGNATIONS.ceo_office

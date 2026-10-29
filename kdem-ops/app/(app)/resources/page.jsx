@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
 import { SCOPES, vName, vColor } from "@/lib/schemas";
 import Modal from "@/components/Modal";
-import { RESOURCE_CATEGORIES, LINK_TYPES, openResource } from "@/lib/resources";
+import { RESOURCE_CATEGORIES, LINK_TYPES, openResource, titleFromFile, categoryFromFile } from "@/lib/resources";
 
 /** Shared documents — policies, templates, reports — for everyone or chosen verticals. */
 export default function ResourcesPage() {
@@ -14,6 +14,8 @@ export default function ResourcesPage() {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("All");
   const [editing, setEditing] = useState(null);
+  const [bulk, setBulk] = useState(null);       // files picked for multiple upload
+  const bulkRef = useRef(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("resources").select("*").order("updated_at", { ascending: false });
@@ -40,6 +42,11 @@ export default function ResourcesPage() {
         <div style={{ marginLeft: "auto", display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
           <div className="searchbox"><Search size={13} style={{ color: "var(--faint)" }} />
             <input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <button className="btn sm" onClick={() => bulkRef.current?.click()}>
+            <Upload size={13} /> Upload files
+          </button>
+          <input ref={bulkRef} type="file" multiple hidden
+            onChange={(e) => { const f = Array.from(e.target.files || []); e.target.value = ""; if (f.length) setBulk(f); }} />
           <button className="btn sm primary" onClick={() => setEditing({ kind: "file", category: "Policy", verticals: [] })}>
             <Plus size={13} /> Add resource
           </button>
@@ -77,6 +84,9 @@ export default function ResourcesPage() {
             </div>
           ))}
         </div>
+      )}
+      {bulk && (
+        <BulkUpload files={bulk} notify={notify} onClose={() => setBulk(null)} onDone={() => { setBulk(null); load(); }} />
       )}
       {editing && (
         <ResourceModal row={editing.id ? editing : null} initial={editing} profile={profile} notify={notify}
@@ -178,6 +188,74 @@ function ResourceModal({ row, initial, profile, notify, onClose, onSaved }) {
       </div>
       <div className="field"><label>Notes</label>
         <textarea value={f.notes || ""} onChange={(e) => set("notes", e.target.value)} disabled={!editable} /></div>
+    </Modal>
+  );
+}
+
+/** Several files at once — title from each file name, type guessed from the name. */
+function BulkUpload({ files, notify, onClose, onDone }) {
+  const [items, setItems] = useState(() => files.map((file) => ({
+    file, title: titleFromFile(file.name), category: categoryFromFile(file.name), state: "",
+  })));
+  const [verticals, setVerticals] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const set = (i, k, v) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const toggleV = (v) => setVerticals((vs) => (vs.includes(v) ? vs.filter((x) => x !== v) : [...vs, v]));
+
+  async function uploadAll() {
+    setBusy(true);
+    let ok = 0;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.state === "done" || !it.title.trim()) continue;
+      set(i, "state", "uploading");
+      const ins = await supabase.from("resources").insert([{
+        title: it.title.trim(), kind: "file", category: it.category, verticals, file_name: it.file.name,
+      }]).select().single();
+      if (ins.error) { set(i, "state", "error"); notify(ins.error.message); continue; }
+      const up = await supabase.storage.from("docs").upload(`resources/${ins.data.id}/${it.file.name}`, it.file, { upsert: true });
+      if (up.error) {
+        await supabase.from("resources").delete().eq("id", ins.data.id);
+        set(i, "state", "error"); notify(up.error.message); continue;
+      }
+      set(i, "state", "done"); ok++;
+    }
+    setBusy(false);
+    notify(`${ok} file${ok === 1 ? "" : "s"} added`);
+    if (ok === items.filter((x) => x.title.trim()).length) onDone();
+  }
+
+  return (
+    <Modal title={`Upload ${items.length} file${items.length > 1 ? "s" : ""}`} onClose={onClose} wide
+      footer={<>
+        <button className="btn sm" onClick={onClose}>Cancel</button>
+        <button className="btn sm primary" disabled={busy} onClick={uploadAll}>{busy ? "Uploading…" : "Upload all"}</button>
+      </>}>
+      <div style={{ fontSize: 12, color: "var(--faint)" }}>Names and types are filled in from each file — change any before uploading.</div>
+      {items.map((it, i) => (
+        <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 170px 70px", gap: 8, alignItems: "center" }}>
+          <input value={it.title} disabled={busy || it.state === "done"} onChange={(e) => set(i, "title", e.target.value)}
+            title={it.file.name}
+            style={{ padding: "8px 10px", border: "1px solid var(--line2)", borderRadius: 9, background: "var(--inset)" }} />
+          <select value={it.category} disabled={busy || it.state === "done"} onChange={(e) => set(i, "category", e.target.value)}
+            style={{ padding: "8px 10px", border: "1px solid var(--line2)", borderRadius: 9, background: "var(--inset)" }}>
+            {RESOURCE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <span style={{ fontSize: 11.5, color: it.state === "error" ? "var(--bad)" : it.state === "done" ? "var(--good)" : "var(--faint)" }}>
+            {it.state === "done" ? "Added" : it.state === "uploading" ? "Uploading…" : it.state === "error" ? "Failed" : `${Math.max(1, Math.round(it.file.size / 1024))} KB`}
+          </span>
+        </div>
+      ))}
+      <div className="field"><label>Who can see them</label>
+        <div className="chips">
+          <button type="button" className={`chip ${!verticals.length ? "on" : ""}`} onClick={() => setVerticals([])}>Everyone</button>
+          {SCOPES.map((k) => (
+            <button key={k} type="button" className={`chip ${verticals.includes(k) ? "on" : ""}`} onClick={() => toggleV(k)}>
+              <span className="origin" style={{ background: vColor(k) }} />{vName(k)}
+            </button>
+          ))}
+        </div>
+      </div>
     </Modal>
   );
 }
