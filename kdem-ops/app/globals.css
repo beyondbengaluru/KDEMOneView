@@ -392,3 +392,30 @@ table.data th[aria-sort="descending"]::after { content: "↓"; }
 .photostrip .x { position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 7px; padding: 2px 5px; }
 
 .filtersel { padding: 6px 9px; border-radius: 10px; border: 1px solid var(--line); background: var(--inset); font-size: 12.5px; color: var(--ink); }
+
+/* ---------- tasks: one-line rows like a spreadsheet ---------- */
+table.data.tasks td { white-space: nowrap; vertical-align: middle; padding-top: 8px; padding-bottom: 8px; }
+table.data.tasks .clip { overflow: hidden; text-overflow: ellipsis; }
+table.data.tasks .notescell { max-width: 420px; min-width: 220px; color: var(--muted); font-size: 12.5px; }
+table.data.tasks .taskcell { max-width: 460px; }
+table.data.tasks .tt { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+table.data.tasks .maintitle { font-weight: 650; overflow: hidden; text-overflow: ellipsis; }
+table.data.tasks .subtitle { font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+table.data.tasks tr.subrow td { background: color-mix(in srgb, var(--inset) 60%, transparent); font-size: 12.5px; }
+table.data.tasks tr.subrow .taskcell { padding-left: 34px; }
+table.data.tasks tr.isdone .maintitle, table.data.tasks tr.isdone .subtitle { color: var(--faint); text-decoration: line-through; }
+table.data.tasks .subicon { color: var(--faint); flex: 0 0 auto; }
+table.data.tasks .caret { width: 18px; height: 18px; display: inline-grid; place-items: center; border: none; background: none; color: var(--muted); padding: 0; flex: 0 0 auto; }
+table.data.tasks .kidcount { font-size: 10.5px; font-family: var(--mono); color: var(--faint); background: var(--inset); border-radius: 6px; padding: 0 5px; margin-left: 4px; }
+table.data.tasks .ownertag { font-size: 10.5px; color: var(--muted); background: var(--inset); border: 1px solid var(--line); border-radius: 99px; padding: 0 7px; margin-left: 6px; }
+table.data.tasks .addsub { opacity: 0; margin-left: 8px; font-size: 10.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid var(--line2); border-radius: 7px; background: var(--surface); color: var(--muted); padding: 1px 6px; }
+table.data.tasks tr:hover .addsub { opacity: 1; }
+table.data.tasks .ordcell { width: 74px; }
+.ord { display: inline-flex; align-items: center; gap: 3px; }
+.ord input { width: 34px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--inset); font-size: 11.5px; text-align: center; color: var(--ink); }
+.ord input::-webkit-inner-spin-button { display: none; }
+.ord .arrows { display: inline-flex; flex-direction: column; }
+.ord .arrows button { border: none; background: none; color: var(--faint); padding: 0 2px; line-height: 1; }
+.ord .arrows button:hover:not(:disabled) { color: var(--brand); }
+.ord .arrows button:disabled { opacity: .3; }
