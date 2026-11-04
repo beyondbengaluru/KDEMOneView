@@ -5,8 +5,8 @@ import { Plus, Settings2, Trash2, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
 import {
-  VERTICALS, BB_CLUSTERS, CLUSTER_TABS, BB_SECTIONS, CUSTOM_COL_TYPES,
-  customSection, cShort, inBB, jobsTotal, isLanded,
+  VERTICALS, BB_CLUSTERS, CLUSTER_TABS, BB_SECTIONS, CUSTOM_COL_TYPES, GTC_SITES,
+  customSection, cShort, inBB, jobsTotal, isLanded, gtcCluster, taskCategory,
 } from "@/lib/schemas";
 import { fmt } from "@/lib/util";
 import Counters from "./Counters";
@@ -19,10 +19,11 @@ import ContactsDirectory from "./ContactsDirectory";
 import AwarenessGallery from "./AwarenessGallery";
 import { useSort } from "@/lib/sort";
 import Modal from "./Modal";
+import Attachments from "./Attachments";
 
 const srcOf = (t) => t.sources || [{ vertical: t.home, tab: t.key }];
 const matches = (sec, r) =>
-  srcOf(sec.tabDef).some((s) => s.vertical === r.vertical && s.tab === r.tab) &&
+  srcOf(sec.tabDef).some((s) => s.vertical === r.vertical && s.tab === r.tab && (!s.filter || s.filter(r.data || {}))) &&
   (!sec.tabDef.filter || sec.tabDef.filter(r.data || {}));
 const statOf = (sec, rows) => rows.length;
 // Cluster boxes and headings: in this order; jobs add up from the jobs
@@ -34,19 +35,15 @@ const fmtJobs = (j) => `${fmt(j.n)}${j.approx ? "+" : ""}`;
 
 export default function BBView() {
   const v = VERTICALS.bb;
-  const { fy, canWrite, isMaster } = useApp();
-  // Strategic initiatives: tab only for people who can see one (RLS decides) and Master
-  const [hasStrategic, setHasStrategic] = useState(false);
-  useEffect(() => {
-    supabase.from("tasks").select("id", { count: "exact", head: true }).eq("vertical", "bb").eq("strategic", true)
-      .then(({ count }) => setHasStrategic(!!count));
-  }, []);
+  const { fy, canWrite } = useApp();
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("tab");
   const urlSec = searchParams.get("sec");
   // Proposals now sit at the top of "All clusters"; keep old links working
   const [tab, setTab] = useState(urlTab === "proposals" ? "all" : urlTab || "overview");
   const [focus, setFocus] = useState(urlSec || null);
+  // Strategic tab: section (gtc / dcs / initiatives / tasks), GTC site, task to open
+  const [strat, setStrat] = useState({ sub: "gtc", site: GTC_SITES[0], task: null });
   useEffect(() => { if (urlTab) setTab(urlTab === "proposals" ? "all" : urlTab); if (urlSec) setFocus(urlSec); }, [urlTab, urlSec]);
 
   const [mirror, setMirror] = useState(null);
@@ -62,7 +59,7 @@ export default function BBView() {
         .or(`tab.in.(${tabs.join(",")}),tab.like.cs_*`),
       supabase.from("records").select("id,vertical,data,created_at")
         .eq("vertical", "bb").eq("tab", "bb_sections").order("created_at"),
-      supabase.from("tasks").select("cluster,status").eq("vertical", "bb"),
+      supabase.from("tasks").select("id,title,topic,cluster,gtc,status,parent_id,sort_order,visibility").eq("vertical", "bb"),
     ]);
     setMirror(r.data || []); setDefs(d.data || []); setTasks(t.data || []);
   }, [fy]);
@@ -93,13 +90,20 @@ export default function BBView() {
           return [byKey[k].label, statFor(byKey[k], (d) => d.cluster === c), k];
         }),
         companies: ["new", "expansions", "pipeline"].reduce((a, k) => a + statFor(byKey[k], (d) => d.cluster === c), 0),
-        openTasks: tasks.filter((t) => t.cluster === c && t.status !== "done").length,
+        openTasks: tasks.filter((t) => !t.parent_id && t.cluster === c && t.status !== "done").length,
       };
     });
     return out;
   }, [sections, statFor, tasks, mirror]);
 
   const canManage = canWrite("bb");
+  const STRAT_SUB = { GTC: "gtc", "Data centres": "dcs", "New initiatives": "initiatives", Strategic: "tasks" };
+  const openInitiative = (t) => {
+    const sub = STRAT_SUB[taskCategory(t)] || "tasks";
+    setStrat({ sub, site: t.gtc || (sub === "gtc" ? GTC_SITES.find((g) => gtcCluster(g) === t.cluster) || GTC_SITES[0] : strat.site), task: t.id });
+    setTab("strategic");
+    window.scrollTo({ top: 0 });
+  };
   const sectionProps = {
     sections, mirror, revealed, reveal, focus, clearFocus: () => setFocus(null),
     color: v.color, canManage, statFor, onNewSection: () => setEditDef({}), onEditSection: setEditDef,
@@ -121,9 +125,7 @@ export default function BBView() {
         ))}
         <button className={`tab ${tab === "policies" ? "on" : ""}`} onClick={() => setTab("policies")}>Policies</button>
         <button className={`tab ${tab === "database" ? "on" : ""}`} onClick={() => setTab("database")}>Database</button>
-        {(hasStrategic || isMaster) && (
-          <button className={`tab ${tab === "strategic" ? "on" : ""}`} onClick={() => setTab("strategic")}>Strategic</button>
-        )}
+        <button className={`tab ${tab === "strategic" ? "on" : ""}`} onClick={() => setTab("strategic")}>Strategic</button>
       </div>
 
       {tab === "overview" && (
@@ -157,7 +159,7 @@ export default function BBView() {
       {tab === "all" && (
         <>
           <SectionHead title="All clusters" {...sectionProps} scope="all" pred={inBB} />
-          <ProposalsBoard vertical="bb" accentColor={v.color} includeMirrors />
+          <ProposalsBoard vertical="bb" accentColor={v.color} includeMirrors initiatives={tasks} onOpenInitiative={openInitiative} />
           <Sections {...sectionProps} scope="all" />
         </>
       )}
@@ -165,7 +167,8 @@ export default function BBView() {
       {CLUSTER_TABS.includes(tab) && (
         <>
           <SectionHead title={tab} {...sectionProps} scope={tab} pred={(d) => d.cluster === tab} facts />
-          <ProposalsBoard key={`p-${tab}`} vertical="bb" accentColor={v.color} clusterFilter={tab} includeMirrors />
+          <ProposalsBoard key={`p-${tab}`} vertical="bb" accentColor={v.color} clusterFilter={tab} includeMirrors
+            initiatives={tasks} onOpenInitiative={openInitiative} />
           <Sections key={`s-${tab}`} {...sectionProps} scope={tab} cluster={tab} />
           <EventsTable vertical="mkt" clusterFilter={tab} title={`${cShort(tab)} events`} />
           <TasksPanel vertical="bb" cluster={tab} title={`${cShort(tab)} tasks`} />
@@ -181,7 +184,9 @@ export default function BBView() {
 
       {tab === "database" && <ContactsDirectory vertical="bb" accentColor={v.color} />}
 
-      {tab === "strategic" && <TasksPanel vertical="bb" strategic title="Strategic initiatives" />}
+      {tab === "strategic" && (
+        <Strategic strat={strat} setStrat={setStrat} sections={sections} tasks={tasks} color={v.color} mirror={mirror} />
+      )}
 
       {editDef && (
         <CustomSectionModal row={editDef.id ? editDef : null} cluster={CLUSTER_TABS.includes(tab) ? tab : null}
@@ -429,5 +434,82 @@ function KitsRegistered({ mirror, onOpen }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Strategic: GTCs (a tab per site with its pipeline, documents and tasks),
+ * data centres (leads + tasks), new initiatives and strategic tasks. Every
+ * table here is a view over the same rows as the cluster tabs — a company or
+ * task edited here changes there too.
+ */
+function Strategic({ strat, setStrat, sections, tasks, color, mirror }) {
+  const { notify, canWrite } = useApp();
+  const byKey = Object.fromEntries(sections.map((x) => [x.key, x]));
+  const pipe = byKey.pipeline, dcs = byKey.dcs;
+  const go = (patch) => setStrat((x) => ({ ...x, task: null, ...patch }));
+  const top = (pred) => tasks.filter((t) => !t.parent_id && pred(t)).length;
+  const subs = [
+    ["gtc", "GTC", top((t) => t.gtc || taskCategory(t) === "GTC")],
+    ["dcs", "Data centres", top((t) => taskCategory(t) === "Data centres")],
+    ["initiatives", "New initiatives", top((t) => taskCategory(t) === "New initiatives")],
+    ["tasks", "Strategic tasks", top((t) => taskCategory(t) === "Strategic")],
+  ];
+  const pipeFor = (site) => (mirror || []).filter((r) =>
+    ["gccs", "datacentres"].includes(r.tab) && r.data?.gtc === site && !isLanded(r.data || {}) && r.data?.stage !== "Dropped").length;
+  const site = strat.site;
+
+  return (
+    <>
+      <div className="card" style={{ paddingBottom: 12 }}>
+        <div className="subtabs">
+          {subs.map(([k, l, n]) => (
+            <button key={k} className={`stab ${strat.sub === k ? "on" : ""}`} onClick={() => go({ sub: k })}>
+              {l}{n ? ` · ${n}` : ""}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {strat.sub === "gtc" && (
+        <>
+          <div className="tabbar">
+            {GTC_SITES.map((g) => {
+              const n = pipeFor(g) + top((t) => t.gtc === g);
+              return (
+                <button key={g} className={`tab ${site === g ? "on" : ""}`} onClick={() => go({ site: g })}>
+                  {g} {n ? <span className="count">{n}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="gtchead">
+            <h2>GTC {site}</h2>
+            <span className="s">{gtcCluster(site) !== site ? `${cShort(gtcCluster(site))} cluster · ` : ""}Pipeline companies and data-centre leads with GTC = {site}, its documents and tasks</span>
+          </div>
+          <DataTable key={`gtc-p-${site}`} pageVertical="bb" tabDef={{ ...pipe.tabDef, viewKey: `bb-gtc-${site}` }} accentColor={color}
+            title={`GTC ${site} — pipeline`} extraFilter={(d) => d.gtc === site}
+            defaults={{ ...(pipe.defaults || {}), gtc: site, cluster: gtcCluster(site) }} hideCols={["gtc"]} />
+          <div className="card pad" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <Attachments key={`gtc-d-${site}`} folder="gtc" id={site.toLowerCase().replace(/[^a-z]+/g, "-")} editable={canWrite("bb")} notify={notify} />
+          </div>
+          <TasksPanel key={`gtc-t-${site}`} vertical="bb" gtc={site} focusId={strat.task} title={`GTC ${site} — tasks`} />
+        </>
+      )}
+
+      {strat.sub === "dcs" && (
+        <>
+          <DataTable key="strat-dcs" pageVertical="bb" tabDef={{ ...dcs.tabDef, viewKey: "bb-strat-dcs" }} accentColor={color}
+            title="Data-centre leads" extraFilter={inBB} defaults={dcs.defaults || {}} />
+          <TasksPanel key="strat-dc-t" vertical="bb" topic="Data centres" focusId={strat.task} title="Data centres — tasks" />
+        </>
+      )}
+      {strat.sub === "initiatives" && (
+        <TasksPanel key="strat-ini" vertical="bb" topic="New initiatives" focusId={strat.task} title="New initiatives" />
+      )}
+      {strat.sub === "tasks" && (
+        <TasksPanel key="strat-tasks" vertical="bb" topic="Strategic" focusId={strat.task} title="Strategic tasks" />
+      )}
+    </>
   );
 }

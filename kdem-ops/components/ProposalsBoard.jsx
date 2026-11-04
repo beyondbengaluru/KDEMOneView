@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Plus, Trash2, FileText, Upload, ExternalLink, X, CheckCircle2, Circle } from "lucide-react";
+import { Plus, Trash2, FileText, Upload, ExternalLink, X, CheckCircle2, Circle, Flag } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { PROPOSAL_STATUSES, PROPOSAL_TARGETS, PROPOSAL_CATEGORIES, BB_CLUSTERS, vColor, vName } from "@/lib/schemas";
+import { PROPOSAL_STATUSES, PROPOSAL_TARGETS, PROPOSAL_CATEGORIES, BB_CLUSTERS, INITIATIVE_CATEGORIES, vColor, vName, taskCategory } from "@/lib/schemas";
 import Modal from "./Modal";
 import Pill from "./Pill";
 
@@ -14,11 +14,15 @@ import Pill from "./Pill";
  */
 // includeMirrors (Beyond Bengaluru): also show other verticals' proposals
 // tied to a BB cluster, e.g. a Gaming CoE in HDB owned by IT/GCC.
-export default function ProposalsBoard({ vertical, accentColor, clusterFilter, includeMirrors = false }) {
+// initiatives (Beyond Bengaluru): top-level tasks in GTC / Data centres /
+// New initiatives / Strategic, shown as cards next to the proposals with a
+// filter; a card opens the task in its Strategic section.
+export default function ProposalsBoard({ vertical, accentColor, clusterFilter, includeMirrors = false, initiatives = null, onOpenInitiative }) {
   const { canWrite, canEditRow, notify } = useApp();
   const editable = canWrite(vertical);
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(null);
+  const [kind, setKind] = useState("all");
 
   const load = useCallback(async () => {
     let q = supabase.from("records").select("*").eq("tab", "proposals").order("updated_at", { ascending: false });
@@ -54,11 +58,21 @@ export default function ProposalsBoard({ vertical, accentColor, clusterFilter, i
     notify(error ? error.message : "Deleted"); setOpen(null); load();
   }
 
+  const inits = (initiatives || []).filter((t) => !t.parent_id && INITIATIVE_CATEGORIES.includes(taskCategory(t)) &&
+    (!clusterFilter || t.cluster === clusterFilter));
+  const kinds = initiatives ? [["all", "All", rows.length + inits.length], ["proposals", "Proposals", rows.length],
+    ...INITIATIVE_CATEGORIES.map((c) => [c, c, inits.filter((t) => taskCategory(t) === c).length]).filter(([, , n]) => n)] : [];
+  const shownProps = kind === "all" || kind === "proposals" ? rows : [];
+  const shownInits = kind === "proposals" ? [] : inits.filter((t) => kind === "all" || taskCategory(t) === kind);
+  const kidsOf = (t) => (initiatives || []).filter((k) => k.parent_id === t.id)
+    .sort((a, b) => (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9));
+  const total = rows.length + inits.length;
+
   return (
     <div className="card">
       <div className="card-head">
         <div>
-          <div className="t">Proposals & strategic initiatives · {rows.length}</div>
+          <div className="t">Proposals & strategic initiatives · {total}</div>
         </div>
         {editable && (
           <button className="btn sm primary" style={{ marginLeft: "auto", background: accentColor, borderColor: accentColor }}
@@ -68,11 +82,40 @@ export default function ProposalsBoard({ vertical, accentColor, clusterFilter, i
         )}
       </div>
 
-      {rows.length === 0 ? (
-        <div className="empty">No proposals yet.</div>
+      {kinds.length > 2 && (
+        <div className="chipbar">
+          {kinds.map(([k, l, n]) => (
+            <button key={k} className={`chip ${kind === k ? "on" : ""}`} onClick={() => setKind(k)}>{l} · {n}</button>
+          ))}
+        </div>
+      )}
+      {shownProps.length + shownInits.length === 0 ? (
+        <div className="empty">{kind === "all" ? "No proposals or initiatives yet." : "Nothing here yet."}</div>
       ) : (
         <div className="propgrid">
-          {rows.map((r) => {
+          {shownInits.map((t) => {
+            const kids = kidsOf(t);
+            const next = kids.find((k) => k.status !== "done");
+            return (
+              <button key={t.id} className="prop" onClick={() => onOpenInitiative?.(t)}>
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <Flag size={15} style={{ color: accentColor, marginTop: 2, flex: "0 0 auto" }} />
+                  <div style={{ fontWeight: 700, fontSize: 13.5, lineHeight: 1.35 }}>{t.title}</div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <Pill value={t.status === "done" ? "Done" : t.status === "inprogress" ? "In progress" : "todo"} />
+                  <span className="pill" style={{ color: "var(--muted)", background: "var(--inset)" }}>{taskCategory(t)}</span>
+                  {t.cluster && !clusterFilter && <span className="pill" style={{ color: "var(--gold)", background: "color-mix(in srgb, var(--gold) 14%, transparent)" }}>{t.cluster}</span>}
+                  {t.gtc && <span className="pill" style={{ color: "var(--gold)", background: "color-mix(in srgb, var(--gold) 14%, transparent)" }}>GTC · {t.gtc}</span>}
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: "auto" }}>
+                  {kids.length ? `${kids.filter((k) => k.status === "done").length}/${kids.length} done · ` : ""}
+                  {next ? `Next: ${next.title}` : "No open actions"}
+                </div>
+              </button>
+            );
+          })}
+          {shownProps.map((r) => {
             const d = r.data || {};
             const openSteps = (d.steps || []).filter((s) => !s.done);
             return (
