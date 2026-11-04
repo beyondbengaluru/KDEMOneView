@@ -408,6 +408,14 @@ table.data.tasks .subicon { color: var(--faint); flex: 0 0 auto; }
 table.data.tasks .caret { width: 18px; height: 18px; display: inline-grid; place-items: center; border: none; background: none; color: var(--muted); padding: 0; flex: 0 0 auto; }
 table.data.tasks .kidcount { font-size: 10.5px; font-family: var(--mono); color: var(--faint); background: var(--inset); border-radius: 6px; padding: 0 5px; margin-left: 4px; }
 table.data.tasks .ownertag { font-size: 10.5px; color: var(--muted); background: var(--inset); border: 1px solid var(--line); border-radius: 99px; padding: 0 7px; margin-left: 6px; }
+table.data.tasks .linktag { font-size: 10.5px; color: var(--gold); background: color-mix(in srgb, var(--gold) 12%, transparent); border-radius: 99px; padding: 0 7px; margin-left: 6px; white-space: nowrap; }
+table.data.tasks tr.grouprow td { background: var(--inset); font-size: 11.5px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); cursor: pointer; padding: 6px 10px; }
+table.data.tasks tr.grouprow td svg { vertical-align: -2px; margin-right: 5px; }
+table.data.tasks tr.grouprow .n { margin-left: 7px; font-weight: 600; color: var(--faint); }
+.chipbar { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 10px; }
+.gtchead { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; margin: 4px 2px 0; }
+.gtchead h2 { font-family: var(--display); font-size: 19px; margin: 0; }
+.gtchead .s { font-size: 12.5px; color: var(--muted); }
 table.data.tasks .addsub { opacity: 0; margin-left: 8px; font-size: 10.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 2px;
   border: 1px solid var(--line2); border-radius: 7px; background: var(--surface); color: var(--muted); padding: 1px 6px; }
 table.data.tasks tr:hover .addsub { opacity: 1; }

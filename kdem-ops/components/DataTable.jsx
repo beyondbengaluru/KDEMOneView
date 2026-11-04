@@ -41,7 +41,8 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
       if (!tabDef.noFy) qy = qy.eq("fy", fy);
       return qy;
     }));
-    const all = results.flatMap((r) => r.data || []);
+    // A source can narrow its own rows (e.g. only data-centre leads tied to a GTC)
+    const all = results.flatMap((r, i) => (r.data || []).filter((x) => !sources[i].filter || sources[i].filter(x.data || {})));
     all.sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
     setRows(all); setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps

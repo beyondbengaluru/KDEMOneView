@@ -12,6 +12,18 @@ export const CLUSTER_TABS = BB_CLUSTERS.filter((c) => c !== "Cluster TBD");
 export const HEAD_CLUSTERS = ["Mysuru", "Mangaluru", "Hubballi-Dharwad-Belagavi", "Kalaburagi"];
 export const SHORT_CLUSTER = { "Hubballi-Dharwad-Belagavi": "HDB" };
 export const cShort = (c) => SHORT_CLUSTER[c] || c;
+// Global Technology Centres: one per site (Belagavi and Hubballi-Dharwad are
+// separate GTCs inside the HDB cluster). Pipeline companies, data-centre
+// leads and tasks carry `gtc` = the site to show up under that GTC.
+export const GTC_SITES = ["Mysuru", "Belagavi", "Hubballi-Dharwad", "Davanagere", "Mangaluru", "Kalaburagi", "Tumakuru"];
+export const gtcCluster = (s) => (s === "Belagavi" || s === "Hubballi-Dharwad" ? "Hubballi-Dharwad-Belagavi" : s);
+// Task categories, in display order. Free text is allowed too — a new name
+// becomes a new group. Sub-tasks follow their parent.
+export const TASK_CATEGORIES = ["New companies & pipeline", "GTC", "Data centres", "New initiatives", "Strategic", "General"];
+// Categories that also show as cards on "Proposals & strategic initiatives"
+export const INITIATIVE_CATEGORIES = ["GTC", "Data centres", "New initiatives", "Strategic"];
+export const taskCategory = (t) => (t?.topic || "").trim() || "General";
+export const categoryRank = (c) => { const i = TASK_CATEGORIES.indexOf(c); return i < 0 ? TASK_CATEGORIES.length - 1.5 : i; };
 
 export const FYS = ["2025-26", "2026-27"];
 export const DEFAULT_FY = "2026-27";
@@ -400,6 +412,7 @@ const BB_DC_COLS = [
   { key: "next_step", label: "Immediate next step", type: "textarea" },
   { key: "cluster", label: "Cluster", type: "select", options: CLUSTERS, hide: true },
   { key: "stage", label: "Stage", type: "select", options: ["Pipeline", "MoU", "Grounded", "Operational", "Cable landing station"], hide: true },
+  { key: "gtc", label: "GTC", type: "select", options: GTC_SITES, hide: true },
   ...CONTACT_COLS,
 ];
 const BB_PIPE_COLS = [
@@ -409,6 +422,7 @@ const BB_PIPE_COLS = [
   { key: "pstage", label: "Stage (1–5)", type: "select", options: ["1", "2", "3", "4", "5"] },
   { key: "company_type", label: "Company type", type: "select", options: ["GCC", "Indian", "Startup"] },
   { key: "policy", label: "Applicable policy", type: "text" },
+  { key: "gtc", label: "GTC", type: "select", options: GTC_SITES },
   { key: "proposed_jobs", label: "Proposed jobs", type: "text", hide: true },
   { key: "expected", label: "Expected onboarding", type: "text", hide: true },
   { key: "type", label: "Type", type: "select", options: [...GCC_TYPES, ...IT_TYPES], hide: true },
@@ -434,8 +448,11 @@ export const BB_SECTIONS = [
   sec("dcs", "Data centres", DATACENTRES, {
     tab: { columns: BB_DC_COLS, hasContact: false, contactUnderName: true },
     defaults: { stage: "Pipeline" } }),
+  // Pipeline companies + data-centre leads taking space in a GTC (same row
+  // as in Data centres, so an edit in one shows in the other)
   sec("pipeline", "Pipeline", COMPANIES, {
-    tab: { filter: isPipeline, columns: BB_PIPE_COLS, hasContact: false },
+    tab: { filter: isPipeline, columns: BB_PIPE_COLS, hasContact: false,
+           sources: [{ vertical: "itgcc", tab: "gccs" }, { vertical: "itgcc", tab: "datacentres", filter: (d) => !!d.gtc }] },
     defaults: { kind: "New", stage: "Engaged" } }),
   sec("awareness", "Awareness sessions", { ...AWARENESS, sources: [{ vertical: "bb", tab: "awareness" }], home: "bb" }),
   sec("startups", "Startups", STARTUPS, {

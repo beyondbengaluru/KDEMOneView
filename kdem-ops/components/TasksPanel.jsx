@@ -3,7 +3,10 @@ import { Fragment, useEffect, useMemo, useState, useCallback } from "react";
 import { Plus, Trash2, Presentation, CalendarCheck, Lock, Users, ChevronRight, ChevronDown, ArrowUp, ArrowDown, CornerDownRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { SCOPES, VERTICAL_KEYS, BB_CLUSTERS, CLUSTER_TABS, TASK_VISIBILITIES, vColor, vName, cShort } from "@/lib/schemas";
+import {
+  SCOPES, VERTICAL_KEYS, BB_CLUSTERS, CLUSTER_TABS, TASK_VISIBILITIES, TASK_CATEGORIES, GTC_SITES,
+  vColor, vName, cShort, taskCategory, categoryRank, gtcCluster,
+} from "@/lib/schemas";
 import { todayISO } from "@/lib/util";
 import Modal from "./Modal";
 import Pill from "./Pill";
@@ -11,19 +14,22 @@ import Attachments from "./Attachments";
 import { useSort } from "@/lib/sort";
 
 /**
- * Tasks with sub-tasks. A task is an initiative or activity (free-text
- * topic, no fixed categories); its sub-tasks are the actions, each with its
- * own owner, deadline, status and notes. Rows keep one line — notes are
- * clipped like an Excel cell (hover to read, click to edit) and the table
- * scrolls sideways. Order is manual (arrows or type a position) unless a
- * column header is clicked to sort.
+ * Tasks with sub-tasks. A task is an initiative or activity; its sub-tasks
+ * are the actions, each with its own owner, deadline, status and notes.
+ * Tasks are grouped by category (TASK_CATEGORIES first, any other name the
+ * team types becomes its own group); a task can also be linked to a GTC
+ * site, which lists it under that GTC as well. Sub-tasks start collapsed.
+ * Rows keep one line — notes are clipped like an Excel cell (hover to read,
+ * click to edit) and the table scrolls sideways. Order is manual within a
+ * group (arrows or type a position) unless a column header is clicked.
  *
  * Modes:  vertical — that vertical (+ tasks shared into it)
  *         cluster  — one BB cluster      coreOnly — BB tasks with no cluster
- *         strategic — only Strategic tasks (otherwise they're left out)
- * Row-level security decides what each person can see.
+ *         topic    — one category only (BB)   gtc — tasks linked to one GTC site
+ * Row-level security decides what each person can see (private tasks only
+ * reach the people they are shared with).
  */
-export default function TasksPanel({ vertical = null, cluster = null, coreOnly = false, strategic = false, title = "Tasks" }) {
+export default function TasksPanel({ vertical = null, cluster = null, coreOnly = false, topic = null, gtc = null, focusId = null, title = "Tasks" }) {
   const { canWrite, notify, profile } = useApp();
   const [rows, setRows] = useState([]);
   const [team, setTeam] = useState([]);
@@ -33,9 +39,11 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
   }, []);
   const [filter, setFilter] = useState("open");
   // BB task tables: a cluster head starts on their own cluster
-  const [clusterView, setClusterView] = useState(profile?.role === "cluster_head" && !strategic ? profile.cluster || "" : "");
+  const scoped = !!(topic || gtc);   // a Strategic-tab section: one category or one GTC
+  const [clusterView, setClusterView] = useState(profile?.role === "cluster_head" && !scoped ? profile.cluster || "" : "");
   const [editing, setEditing] = useState(null);
-  const [collapsed, setCollapsed] = useState({});
+  const [expanded, setExpanded] = useState(focusId ? { [focusId]: true } : {});   // sub-tasks start collapsed
+  useEffect(() => { if (focusId) setExpanded((m) => ({ ...m, [focusId]: true })); }, [focusId]);
 
   const load = useCallback(async () => {
     let qy = supabase.from("tasks").select("*");
@@ -43,19 +51,25 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
     if (coreOnly) qy = qy.eq("vertical", "bb").is("cluster", null);
     else if (vertical && !cluster) qy = qy.or(`vertical.eq.${vertical},verticals.cs.{${vertical}}` +
       (vertical === "bb" && profile?.role === "cluster_head" && profile.cluster ? `,cluster.eq.${profile.cluster}` : ""));
-    qy = qy.eq("strategic", !!strategic);
     const { data } = await qy;
     setRows(data || []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vertical, cluster, coreOnly, strategic]);
+  }, [vertical, cluster, coreOnly]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const ch = supabase.channel(`tasks-${vertical || "all"}-${cluster || "x"}-${coreOnly}-${strategic}`)
+    const ch = supabase.channel(`tasks-${vertical || "all"}-${cluster || "x"}-${coreOnly}-${topic || "t"}-${gtc || "g"}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => load())
       .subscribe();
     return () => supabase.removeChannel(ch);
-  }, [vertical, cluster, coreOnly, strategic, load]);
+  }, [vertical, cluster, coreOnly, topic, gtc, load]);
+
+  // Opened from an initiative card: scroll to that task once it's on screen
+  useEffect(() => {
+    if (!focusId || !rows.length) return;
+    const tm = setTimeout(() => document.getElementById(`task-${focusId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+    return () => clearTimeout(tm);
+  }, [focusId, rows.length]);
 
   // Manual order first (sort_order), then deadline, then title
   const byOrder = (a, b) =>
@@ -73,13 +87,15 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
   const top = useMemo(() => {
     // A sub-task whose parent isn't visible to this person shows on its own
     let out = rows.filter((t) => !t.parent_id || !parentIds.has(t.parent_id));
+    if (topic) out = out.filter((t) => taskCategory(t).toLowerCase() === topic.toLowerCase());
+    if (gtc) out = out.filter((t) => t.gtc === gtc);
     // One cluster = its own tasks + BB tasks for all clusters + tasks from other verticals
     if (clusterView && !cluster) out = out.filter((t) => t.cluster === clusterView || !t.cluster || t.vertical !== "bb");
     const open = (t) => t.status !== "done" || (children[t.id] || []).some((c) => c.status !== "done");
     if (filter === "open") out = out.filter(open);
     if (filter === "done") out = out.filter((t) => !open(t));
     return [...out].sort(byOrder);
-  }, [rows, parentIds, children, filter, clusterView, cluster]);
+  }, [rows, parentIds, children, filter, clusterView, cluster, topic, gtc]);
 
   const RANK = { high: 0, medium: 1, low: 2, todo: 0, inprogress: 1, done: 2 };
   const { sorted, th } = useSort(top, {
@@ -90,25 +106,41 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
   });
   const headerSorted = sorted !== top;
 
+  // Groups by category, in TASK_CATEGORIES order (one category view = one group)
+  const groups = useMemo(() => {
+    const m = new Map();
+    sorted.forEach((t) => { const c = topic ? topic : taskCategory(t); if (!m.has(c)) m.set(c, []); m.get(c).push(t); });
+    return [...m.entries()].sort(([a], [b]) => categoryRank(a) - categoryRank(b) || a.localeCompare(b));
+  }, [sorted, topic]);
+  // Manual order is kept within a group
+  const orderList = useMemo(() => {
+    const m = {};
+    top.forEach((t) => { const c = topic ? topic : taskCategory(t); (m[c] = m[c] || []).push(t); });
+    return m;
+  }, [top, topic]);
+  const showGroupHeads = !topic && !(groups.length === 1 && groups[0][0] === "General");
+  const [shutGroups, setShutGroups] = useState({});
+
   // Mirrors the SQL policy
   const canEditTask = (t) =>
     t.created_by === profile.id || (t.assignee && t.assignee === profile.name) ||
     (t.shared_with || []).includes(profile.id) ||
-    (!t.strategic && profile.role === "cluster_head" && t.cluster && t.cluster === profile.cluster) ||
-    (!t.strategic && t.visibility !== "private" && canWrite(t.vertical) &&
+    (t.visibility !== "private" && profile.role === "cluster_head" && t.cluster && t.cluster === profile.cluster) ||
+    (t.visibility !== "private" && canWrite(t.vertical) &&
       (profile.role !== "cluster_head" || (t.cluster || "") === profile.cluster));
 
   async function save(f, id, stayOpen = false) {
     const payload = {
       title: f.title, vertical: f.vertical, verticals: f.verticals || [],
-      cluster: f.cluster || null, assignee: f.assignee || "", topic: f.topic || "",
+      cluster: f.cluster || null, assignee: f.assignee || "", topic: f.topic || "", gtc: f.gtc || null,
       priority: f.priority, status: f.status, due_date: f.due_date || null, due_time: f.due_time || "",
       visibility: f.visibility || "vertical", notes: f.notes || "",
-      parent_id: f.parent_id || null, strategic: !!f.strategic, shared_with: f.shared_with || [],
+      parent_id: f.parent_id || null, shared_with: f.shared_with || [],
     };
     if (!id) {
-      // New items go to the end of their list
-      const sibs = rows.filter((t) => (t.parent_id || null) === payload.parent_id);
+      // New items go to the end of their list (top-level: of their category)
+      const sibs = rows.filter((t) => (t.parent_id || null) === payload.parent_id &&
+        (payload.parent_id || taskCategory(t) === taskCategory(payload)));
       payload.sort_order = sibs.reduce((m, t) => Math.max(m, t.sort_order || 0), 0) + 1;
     }
     const res = id
@@ -147,32 +179,33 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
   }
 
   const defaults = {
-    vertical: vertical || profile?.vertical || VERTICAL_KEYS[0],
-    cluster: strategic ? null : cluster || (profile?.role === "cluster_head" ? profile.cluster : clusterView || null),
-    priority: "medium", status: "todo", visibility: strategic ? "private" : "vertical", verticals: [],
-    strategic, shared_with: [], topic: "",
+    vertical: vertical || (topic || gtc ? "bb" : profile?.vertical) || VERTICAL_KEYS[0],
+    cluster: gtc ? gtcCluster(gtc) : cluster || (profile?.role === "cluster_head" ? profile.cluster : clusterView || null),
+    priority: "medium", status: "todo", visibility: "vertical", verticals: [],
+    shared_with: [], topic: topic || (gtc ? "GTC" : ""), gtc: gtc || null,
   };
   const subDefaults = (p) => ({
     parent_id: p.id, parentTitle: p.title, vertical: p.vertical, verticals: p.verticals || [], cluster: p.cluster,
-    topic: p.topic || "", visibility: p.visibility, strategic: p.strategic, shared_with: p.shared_with || [],
+    topic: p.topic || "", gtc: p.gtc || null, visibility: p.visibility, shared_with: p.shared_with || [],
     priority: "medium", status: "todo",
   });
-  const topics = useMemo(() => [...new Set(rows.map((t) => t.topic).filter(Boolean))].sort(), [rows]);
+  const topics = useMemo(() => [...new Set([...TASK_CATEGORIES, ...rows.map((t) => t.topic).filter(Boolean)])], [rows]);
   const overdue = (t) => t.due_date && t.status !== "done" && t.due_date < todayISO();
   const showVerticalCol = !vertical && !coreOnly;
   // Beyond Bengaluru tables: cluster instead of owner, the other verticals
   // a task is shared with instead of "Beyond Bengaluru"
   const bbMode = vertical === "bb" || coreOnly;
   const crossOf = (t) => [...new Set([t.vertical, ...(t.verticals || [])])].filter((v) => v !== "bb");
-  const showClusterCol = (vertical === "bb" || coreOnly || !!cluster) && !strategic;
+  const showClusterCol = (vertical === "bb" || coreOnly || !!cluster || scoped) && !gtc;
   const anyKids = top.some((t) => (children[t.id] || []).length);
 
   const renderRow = (t, list, idx, sub = false) => {
     const kids = children[t.id] || [];
-    const isOpen = !collapsed[t.id];
+    const isOpen = !!expanded[t.id];
     const editable = canEditTask(t);
     return (
-      <tr key={t.id} className={`${sub ? "subrow" : ""} ${t.status === "done" ? "isdone" : ""}`}
+      <tr key={t.id} id={sub ? undefined : `task-${t.id}`}
+        className={`${sub ? "subrow" : ""} ${t.status === "done" ? "isdone" : ""} ${!sub && focusId === t.id ? "flash" : ""}`}
         onClick={() => setEditing(sub ? { ...t, parentTitle: rows.find((r) => r.id === t.parent_id)?.title } : t)}>
         <td className="ordcell" onClick={(e) => e.stopPropagation()}>
           {!headerSorted && editable ? (
@@ -190,16 +223,17 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
         <td className="taskcell" title={t.title}>
           <span className="tt">
             {sub ? <CornerDownRight size={12} className="subicon" /> : kids.length ? (
-              <button className="caret" onClick={(e) => { e.stopPropagation(); setCollapsed((c) => ({ ...c, [t.id]: isOpen })); }}>
+              <button className="caret" onClick={(e) => { e.stopPropagation(); setExpanded((c) => ({ ...c, [t.id]: !isOpen })); }}>
                 {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
               </button>
             ) : anyKids ? <span className="caret" /> : null}
             {t.meeting_id && <Presentation size={12} style={{ color: "var(--brand)", marginRight: 5 }} />}
             {t.event_id && <CalendarCheck size={12} style={{ color: "var(--gold)", marginRight: 5 }} />}
-            {(t.visibility === "private" || t.strategic) && <Lock size={11} style={{ color: "var(--faint)", marginRight: 5 }} />}
+            {t.visibility === "private" && <Lock size={11} style={{ color: "var(--faint)", marginRight: 5 }} />}
             {t.visibility === "team" && <Users size={11} style={{ color: "var(--faint)", marginRight: 5 }} />}
             <span className={sub ? "subtitle" : "maintitle"}>{t.title}</span>
             {sub && bbMode && t.assignee && <span className="ownertag">{t.assignee}</span>}
+            {!sub && t.gtc && !gtc && <span className="linktag" title={`Also listed under GTC ${t.gtc}`}>GTC · {t.gtc}</span>}
             {!sub && kids.length > 0 && (
               <span className="kidcount">{kids.filter((k) => k.status === "done").length}/{kids.length}</span>
             )}
@@ -210,12 +244,11 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
             )}
           </span>
         </td>
-        <td className="clip" style={{ color: "var(--muted)", maxWidth: 150 }} title={t.topic || ""}>{sub ? "" : t.topic || "—"}</td>
         {showVerticalCol && (
           <td>{!sub && <span className="pill" style={{ color: vColor(t.vertical), background: `${vColor(t.vertical)}1c` }}>{vName(t.vertical)}</span>}</td>
         )}
         {showClusterCol && !cluster && <td style={{ color: "var(--muted)", fontSize: 12.5 }}>{sub ? "" : t.cluster ? cShort(t.cluster) : "Core"}</td>}
-        {bbMode && !strategic ? (
+        {bbMode ? (
           <td>{!sub && (crossOf(t).length ? crossOf(t).map((v) => (
             <span key={v} className="pill" style={{ color: vColor(v), background: `${vColor(v)}1c`, marginRight: 4 }}>{vName(v)}</span>
           )) : <span style={{ color: "var(--faint)" }}>—</span>)}</td>
@@ -238,20 +271,20 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
       <div className="card-head">
         <div><div className="t">{title}</div></div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
-          {(vertical === "bb" || coreOnly) && !cluster && !strategic && (
+          {(vertical === "bb" || coreOnly || scoped) && !cluster && !gtc && (
             <select className="filtersel" value={clusterView} onChange={(e) => setClusterView(e.target.value)}>
               <option value="">All clusters</option>
               {CLUSTER_TABS.map((c) => <option key={c} value={c}>{cShort(c)}</option>)}
             </select>
           )}
-          {anyKids && (
-            <button className="btn sm ghost" onClick={() => {
-              const allClosed = top.every((t) => collapsed[t.id] || !(children[t.id] || []).length);
-              setCollapsed(allClosed ? {} : Object.fromEntries(top.map((t) => [t.id, true])));
-            }}>
-              {top.every((t) => collapsed[t.id] || !(children[t.id] || []).length) ? "Expand all" : "Collapse all"}
-            </button>
-          )}
+          {anyKids && (() => {
+            const anyOpen = top.some((t) => expanded[t.id] && (children[t.id] || []).length);
+            return (
+              <button className="btn sm ghost" onClick={() => setExpanded(anyOpen ? {} : Object.fromEntries(top.map((t) => [t.id, true])))}>
+                {anyOpen ? "Collapse all" : "Expand all"}
+              </button>
+            );
+          })()}
           {["open", "done", "all"].map((f) => (
             <button key={f} className={`btn sm ${filter === f ? "primary" : "ghost"}`} onClick={() => setFilter(f)}>
               {f[0].toUpperCase() + f.slice(1)}
@@ -272,10 +305,9 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
               <tr>
                 <th title="Order — use the arrows or type a position">#</th>
                 <th {...th("task")}>Task</th>
-                <th {...th("topic")}>Topic</th>
                 {showVerticalCol && <th {...th("vertical")}>Vertical</th>}
                 {showClusterCol && !cluster && <th {...th("cluster")}>Cluster</th>}
-                {bbMode && !strategic && <th {...th("cross")}>Cross-vertical</th>}
+                {bbMode && <th {...th("cross")}>Cross-vertical</th>}
                 {!bbMode && <th {...th("assignee")}>Owner</th>}
                 <th {...th("priority")}>Priority</th>
                 <th {...th("status")}>Status</th><th {...th("due")}>Deadline</th>
@@ -283,10 +315,22 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
               </tr>
             </thead>
             <tbody>
-              {sorted.map((t, i) => (
-                <Fragment key={t.id}>
-                  {renderRow(t, top, headerSorted ? i : top.indexOf(t))}
-                  {!collapsed[t.id] && (children[t.id] || []).map((c, j) => renderRow(c, children[t.id], j, true))}
+              {groups.map(([g, list]) => (
+                <Fragment key={g}>
+                  {showGroupHeads && (
+                    <tr className="grouprow" onClick={() => setShutGroups((m) => ({ ...m, [g]: !m[g] }))}>
+                      <td colSpan={20}>
+                        {shutGroups[g] ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                        <span>{g}</span><span className="n">{list.length}</span>
+                      </td>
+                    </tr>
+                  )}
+                  {!shutGroups[g] && list.map((t, i) => (
+                    <Fragment key={t.id}>
+                      {renderRow(t, orderList[g] || list, headerSorted ? i : (orderList[g] || list).indexOf(t))}
+                      {expanded[t.id] && (children[t.id] || []).map((c, j) => renderRow(c, children[t.id], j, true))}
+                    </Fragment>
+                  ))}
                 </Fragment>
               ))}
             </tbody>
@@ -307,6 +351,7 @@ export default function TasksPanel({ vertical = null, cluster = null, coreOnly =
 
 function TaskModal({ task, editableFn, team, topics, kids, lockVertical, lockCluster, onSave, onDelete, onClose, notify, onAddSub, onOpen }) {
   const [f, setF] = useState({ verticals: [], shared_with: [], ...task });
+  const isBB = f.vertical === "bb";
   const [savedId, setSavedId] = useState(task.id || null);
   const isSub = !!f.parent_id;
   async function ensureId() {
@@ -341,18 +386,25 @@ function TaskModal({ task, editableFn, team, topics, kids, lockVertical, lockClu
         <input value={f.title ?? ""} onChange={(e) => set("title", e.target.value)} disabled={!editable} autoFocus /></div>
       <div className="grid2">
         {!isSub && (
-          <div className="field"><label>Topic (optional — any name)</label>
+          <div className="field"><label>Category (pick one or type a new one)</label>
             <input list="kdem-topics" value={f.topic ?? ""} onChange={(e) => set("topic", e.target.value)} disabled={!editable}
-              placeholder="e.g. GTC, Data Centre, Company onboarding" />
+              placeholder="General" />
             <datalist id="kdem-topics">{topics.map((t) => <option key={t} value={t} />)}</datalist></div>
         )}
-        {!isSub && !f.strategic && (
+        {!isSub && isBB && (
+          <div className="field"><label>GTC (optional — also lists it under that GTC)</label>
+            <select value={f.gtc ?? ""} onChange={(e) => set("gtc", e.target.value || null)} disabled={!editable}>
+              <option value="">—</option>
+              {GTC_SITES.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select></div>
+        )}
+        {!isSub && (
           <div className="field"><label>Vertical (owner)</label>
             <select value={f.vertical} onChange={(e) => set("vertical", e.target.value)} disabled={!editable || lockVertical}>
               {SCOPES.map((k) => <option key={k} value={k}>{vName(k)}</option>)}
             </select></div>
         )}
-        {!isSub && !f.strategic && f.vertical === "bb" && (
+        {!isSub && f.vertical === "bb" && (
           <div className="field"><label>Cluster</label>
             <select value={f.cluster ?? ""} onChange={(e) => set("cluster", e.target.value || null)} disabled={!editable || lockCluster}>
               <option value="">All clusters / core team</option>
@@ -374,14 +426,14 @@ function TaskModal({ task, editableFn, team, topics, kids, lockVertical, lockClu
           <input type="date" value={f.due_date ?? ""} onChange={(e) => set("due_date", e.target.value)} disabled={!editable} /></div>
         <div className="field"><label>Time (optional)</label>
           <input type="time" value={f.due_time ?? ""} onChange={(e) => set("due_time", e.target.value)} disabled={!editable} /></div>
-        {!isSub && !f.strategic && (
+        {!isSub && (
           <div className="field"><label>Visible to</label>
             <select value={f.visibility || "vertical"} onChange={(e) => set("visibility", e.target.value)} disabled={!editable}>
               {TASK_VISIBILITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select></div>
         )}
       </div>
-      {!isSub && (f.strategic || f.visibility === "private") && (
+      {!isSub && f.visibility === "private" && (
         <div className="field"><label>Also shared with</label>
           <div className="chips">
             {team.map((p) => (
@@ -389,10 +441,10 @@ function TaskModal({ task, editableFn, team, topics, kids, lockVertical, lockClu
                 className={`chip ${(f.shared_with || []).includes(p.id) ? "on" : ""}`} onClick={() => toggleP(p.id)}>{p.name}</button>
             ))}
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 5 }}>Only you and the people picked here can see it{f.strategic ? " (sub-tasks too)" : ""}.</div>
+          <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 5 }}>Only you and the people picked here can see it (sub-tasks too).</div>
         </div>
       )}
-      {!isSub && !f.strategic && (
+      {!isSub && (
         <div className="field"><label>Also visible in (cross-vertical)</label>
           <div className="chips">
             {SCOPES.filter((k) => k !== f.vertical).map((k) => (
