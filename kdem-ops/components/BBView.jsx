@@ -34,7 +34,13 @@ const fmtJobs = (j) => `${fmt(j.n)}${j.approx ? "+" : ""}`;
 
 export default function BBView() {
   const v = VERTICALS.bb;
-  const { fy, canWrite } = useApp();
+  const { fy, canWrite, isMaster } = useApp();
+  // Strategic initiatives: tab only for people who can see one (RLS decides) and Master
+  const [hasStrategic, setHasStrategic] = useState(false);
+  useEffect(() => {
+    supabase.from("tasks").select("id", { count: "exact", head: true }).eq("vertical", "bb").eq("strategic", true)
+      .then(({ count }) => setHasStrategic(!!count));
+  }, []);
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("tab");
   const urlSec = searchParams.get("sec");
@@ -115,6 +121,9 @@ export default function BBView() {
         ))}
         <button className={`tab ${tab === "policies" ? "on" : ""}`} onClick={() => setTab("policies")}>Policies</button>
         <button className={`tab ${tab === "database" ? "on" : ""}`} onClick={() => setTab("database")}>Database</button>
+        {(hasStrategic || isMaster) && (
+          <button className={`tab ${tab === "strategic" ? "on" : ""}`} onClick={() => setTab("strategic")}>Strategic</button>
+        )}
       </div>
 
       {tab === "overview" && (
@@ -171,6 +180,8 @@ export default function BBView() {
       )}
 
       {tab === "database" && <ContactsDirectory vertical="bb" accentColor={v.color} />}
+
+      {tab === "strategic" && <TasksPanel vertical="bb" strategic title="Strategic initiatives" />}
 
       {editDef && (
         <CustomSectionModal row={editDef.id ? editDef : null} cluster={CLUSTER_TABS.includes(tab) ? tab : null}

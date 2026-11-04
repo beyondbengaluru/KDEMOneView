@@ -64,7 +64,7 @@ export default function CalendarPage() {
     (async () => {
       const [e, t, m] = await Promise.all([
         supabase.from("events").select("*").eq("fy", fy).neq("status", "cancelled"),
-        supabase.from("tasks").select("*").not("due_date", "is", null),
+        supabase.from("tasks").select("*"),
         supabase.from("meetings").select("*").not("date", "is", null),
       ]);
       setEvents(e.data || []);
@@ -77,8 +77,9 @@ export default function CalendarPage() {
     const map = {};
     const push = (d, item) => { if (d) (map[d] = map[d] || []).push(item); };
     if (mode === "tasks") {
+      const titleOf = Object.fromEntries(tasks.map((t) => [t.id, t.title]));
       tasks.forEach((t) => push(t.due_date, {
-        kind: "task", label: t.title, color: t.status === "done" ? "var(--good)" : vColor(t.vertical),
+        kind: "task", label: t.parent_id && titleOf[t.parent_id] ? `${titleOf[t.parent_id]} › ${t.title}` : t.title, color: t.status === "done" ? "var(--good)" : vColor(t.vertical),
         sub: `${vName(t.vertical)} · ${t.status === "done" ? "done" : t.status === "inprogress" ? "in progress" : "due"}${t.assignee ? ` · ${t.assignee}` : ""}`, meta: t,
       }));
       return map;
