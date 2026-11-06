@@ -44,6 +44,8 @@ export default function AdminPage() {
       name: f.name, title: f.title || "", role: f.role,
       vertical: ["lead", "member"].includes(f.role) ? f.vertical : f.role === "external" ? (f.desk || "pr_desk") : (f.role === "cluster_head" ? "bb" : (f.role === "ceo" ? "ceo" : null)),
       cluster: f.role === "cluster_head" ? f.cluster : null,
+      // BB pipelines are need-to-know (migrate_v11): cluster heads see their own cluster only
+      pipeline_all: ["lead", "member"].includes(f.role) && f.vertical === "bb" ? !!f.pipeline_all : false,
     }).eq("id", f.id);
     notify(error ? error.message : "Saved");
     setEditP(null); load();
@@ -186,6 +188,15 @@ export default function AdminPage() {
                 <select value={editP.desk ?? (editP.vertical in DESKS ? editP.vertical : "pr_desk")} onChange={(e) => setEditP({ ...editP, desk: e.target.value })}>
                   {Object.entries(DESKS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </select></div>
+            )}
+            {["lead", "member"].includes(editP.role) && editP.vertical === "bb" && (
+              <div className="field"><label>BB pipelines</label>
+                <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, fontWeight: 500 }}>
+                  <input type="checkbox" checked={!!editP.pipeline_all} onChange={(e) => setEditP({ ...editP, pipeline_all: e.target.checked })} />
+                  Sees every cluster's pipeline
+                </label>
+                <div style={{ fontSize: 11.5, color: "var(--faint)" }}>Off: no pipeline rows. Cluster heads always see their own cluster only; Master and the CEO Office see all.</div>
+              </div>
             )}
             {editP.role === "cluster_head" && (
               <div className="field"><label>Cluster</label>
