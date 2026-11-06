@@ -19,7 +19,9 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [clusterF, setClusterF] = useState("");
+  // Beyond Bengaluru: a cluster head's tables open on their own cluster ("All clusters" to see the rest)
+  const [clusterF, setClusterF] = useState(() =>
+    pageVertical === "bb" && profile?.role === "cluster_head" && profile.cluster && !hideCols.includes("cluster") ? profile.cluster : "");
   const [editing, setEditing] = useState(null);
   const fileRef = useRef(null);
 
@@ -129,7 +131,7 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
   // Cluster filter appears when the rows span more than one cluster
   const clusterOptions = hideCols.includes("cluster") || !tabDef.columns.some((c) => c.key === "cluster") ? []
     : [...new Set(rows.filter((r) => (!tabDef.filter || tabDef.filter(r.data || {})) && (!extraFilter || extraFilter(r.data || {})))
-        .map((r) => r.data?.cluster).filter(Boolean))].sort();
+        .map((r) => r.data?.cluster).concat(clusterF || []).filter(Boolean))].sort();
 
   return (
     <div className={`card anchor ${className}`} id={id}>
@@ -140,7 +142,7 @@ export default function DataTable({ pageVertical, tabDef, accentColor, defaults 
         </div>
         {headExtra}
         <div style={{ marginLeft: "auto", display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
-          {clusterOptions.length > 1 && (
+          {(clusterOptions.length > 1 || clusterF) && (
             <select className="filtersel" value={clusterF} onChange={(e) => setClusterF(e.target.value)}>
               <option value="">All clusters</option>
               {clusterOptions.map((c) => <option key={c} value={c}>{c}</option>)}

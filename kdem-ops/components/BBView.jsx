@@ -35,12 +35,14 @@ const fmtJobs = (j) => `${fmt(j.n)}${j.approx ? "+" : ""}`;
 
 export default function BBView() {
   const v = VERTICALS.bb;
-  const { fy, canWrite } = useApp();
+  const { fy, canWrite, profile } = useApp();
+  // A cluster head lands on their own cluster; the other tabs stay one click away
+  const homeTab = profile?.role === "cluster_head" && CLUSTER_TABS.includes(profile.cluster) ? profile.cluster : "overview";
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("tab");
   const urlSec = searchParams.get("sec");
   // Proposals now sit at the top of "All clusters"; keep old links working
-  const [tab, setTab] = useState(urlTab === "proposals" ? "all" : urlTab || "overview");
+  const [tab, setTab] = useState(urlTab === "proposals" ? "all" : urlTab || homeTab);
   const [focus, setFocus] = useState(urlSec || null);
   // Strategic tab: section (gtc / dcs / initiatives / tasks), GTC site, task to open
   const [strat, setStrat] = useState({ sub: "gtc", site: GTC_SITES[0], task: null });

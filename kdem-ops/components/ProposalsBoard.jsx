@@ -18,9 +18,13 @@ import Pill from "./Pill";
 // New initiatives / Strategic, shown as cards next to the proposals with a
 // filter; a card opens the task in its Strategic section.
 export default function ProposalsBoard({ vertical, accentColor, clusterFilter, includeMirrors = false, initiatives = null, onOpenInitiative }) {
-  const { canWrite, canEditRow, notify } = useApp();
+  const { canWrite, canEditRow, notify, profile } = useApp();
   const editable = canWrite(vertical);
-  const [rows, setRows] = useState([]);
+  // BB "All clusters": a cluster head starts on their own cluster, with "All clusters" to see the rest
+  const [pick, setPick] = useState(vertical === "bb" && !clusterFilter && profile?.role === "cluster_head" ? profile.cluster || "" : "");
+  const cl = clusterFilter || pick;
+  const [allRows, setRows] = useState([]);
+  const rows = cl ? allRows.filter((r) => r.data?.cluster === cl) : allRows;
   const [open, setOpen] = useState(null);
   const [kind, setKind] = useState("all");
 
@@ -42,7 +46,7 @@ export default function ProposalsBoard({ vertical, accentColor, clusterFilter, i
   }, [vertical, clusterFilter, includeMirrors, load]);
 
   async function save(data, id) {
-    if (clusterFilter && !data.cluster) data.cluster = clusterFilter;
+    if (cl && !data.cluster) data.cluster = cl;
     const res = id
       ? await supabase.from("records").update({ data }).eq("id", id)
       : await supabase.from("records").insert([{ vertical, tab: "proposals", data }]).select().single();
@@ -59,7 +63,7 @@ export default function ProposalsBoard({ vertical, accentColor, clusterFilter, i
   }
 
   const inits = (initiatives || []).filter((t) => !t.parent_id && INITIATIVE_CATEGORIES.includes(taskCategory(t)) &&
-    (!clusterFilter || t.cluster === clusterFilter));
+    (!cl || t.cluster === cl));
   const kinds = initiatives ? [["all", "All", rows.length + inits.length], ["proposals", "Proposals", rows.length],
     ...INITIATIVE_CATEGORIES.map((c) => [c, c, inits.filter((t) => taskCategory(t) === c).length]).filter(([, , n]) => n)] : [];
   const shownProps = kind === "all" || kind === "proposals" ? rows : [];
@@ -74,8 +78,14 @@ export default function ProposalsBoard({ vertical, accentColor, clusterFilter, i
         <div>
           <div className="t">Proposals & strategic initiatives · {total}</div>
         </div>
+        {vertical === "bb" && !clusterFilter && (
+          <select className="filtersel" style={{ marginLeft: "auto" }} value={pick} onChange={(e) => setPick(e.target.value)}>
+            <option value="">All clusters</option>
+            {BB_CLUSTERS.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
         {editable && (
-          <button className="btn sm primary" style={{ marginLeft: "auto", background: accentColor, borderColor: accentColor }}
+          <button className="btn sm primary" style={{ marginLeft: vertical === "bb" && !clusterFilter ? 0 : "auto", background: accentColor, borderColor: accentColor }}
             onClick={() => setOpen({ data: { status: "Drafting", steps: [] } })}>
             <Plus size={13} /> New proposal
           </button>
@@ -105,7 +115,7 @@ export default function ProposalsBoard({ vertical, accentColor, clusterFilter, i
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <Pill value={t.status === "done" ? "Done" : t.status === "inprogress" ? "In progress" : "todo"} />
                   <span className="pill" style={{ color: "var(--muted)", background: "var(--inset)" }}>{taskCategory(t)}</span>
-                  {t.cluster && !clusterFilter && <span className="pill" style={{ color: "var(--gold)", background: "color-mix(in srgb, var(--gold) 14%, transparent)" }}>{t.cluster}</span>}
+                  {t.cluster && !cl && <span className="pill" style={{ color: "var(--gold)", background: "color-mix(in srgb, var(--gold) 14%, transparent)" }}>{t.cluster}</span>}
                   {t.gtc && <span className="pill" style={{ color: "var(--gold)", background: "color-mix(in srgb, var(--gold) 14%, transparent)" }}>GTC · {t.gtc}</span>}
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: "auto" }}>
